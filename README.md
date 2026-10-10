@@ -1,6 +1,7 @@
 # Migraine
 
 [![CI](https://github.com/auryn-macmillan/migraine/actions/workflows/ci.yml/badge.svg)](https://github.com/auryn-macmillan/migraine/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/auryn-macmillan/migraine/branch/main/graph/badge.svg)](https://codecov.io/gh/auryn-macmillan/migraine)
 
 > *Migraine* — because migrating from token A to token B is normally such a pain.
 
@@ -132,12 +133,19 @@ Verity's trusted boundary, and how to build it inside a Verity checkout.
 pull request:
 
 - **Foundry** — `forge fmt --check`, `forge build`, `forge lint` and the full
-  unit/integration/fuzz/invariant test suite.
+  unit/integration/fuzz/invariant test suite. Coverage is generated with
+  `forge coverage` and reported to [Codecov](https://codecov.io/gh/auryn-macmillan/migraine)
+  (`src/Migraine.sol` is currently 100% line/branch/function covered).
 - **Verity** — installs the Lean toolchain, clones Verity at a pinned revision,
   overlays the `Migraine` model via `scripts/ci-verity.sh`, builds the
   proofs (`lake build Contracts.Migraine.Proofs.Correctness`), fails on
   any `sorry`/`admit`, registers the compiler model and emits
   `Migraine.yul` as a build artifact.
+
+> The Codecov badge populates once the repository is connected to Codecov
+> (install the Codecov GitHub App, or set a `CODECOV_TOKEN` repository secret
+> for private uploads); the CI step is non-blocking so builds stay green either
+> way.
 
 ## Security notes and assumptions
 

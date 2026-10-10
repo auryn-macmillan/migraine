@@ -54,6 +54,16 @@ jobs:
       - name: Run tests
         run: forge test -vvv
 
+      - name: Generate coverage (lcov)
+        run: forge coverage --report lcov
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          files: ./lcov.info
+          fail_ci_if_error: false
+          token: ${{ secrets.CODECOV_TOKEN }}
+
   # ---------------------------------------------------------------------------
   # Verity (Lean 4): overlay the model into a pinned Verity checkout and
   # machine-check the proofs, then compile the model to Yul.

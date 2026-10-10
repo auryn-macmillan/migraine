@@ -4,6 +4,10 @@ cache/
 broadcast/
 forge-cache/
 
+# Coverage
+lcov.info
+coverage/
+
 # Node (for optional tooling)
 node_modules/
 

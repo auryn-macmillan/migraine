@@ -1,0 +1,25 @@
+# Codecov configuration.
+#
+# Only the deployable `src/` tree counts toward coverage; tests, scripts, the
+# Lean/Verity formalization and vendored dependencies are ignored.
+
+coverage:
+  status:
+    project:
+      default:
+        target: auto
+        threshold: 1%
+    patch:
+      default:
+        target: auto
+        threshold: 1%
+
+ignore:
+  - "test/**"
+  - "script/**"
+  - "lib/**"
+  - "verity/**"
+
+comment:
+  layout: "reach, diff, flags, files"
+  require_changes: false
