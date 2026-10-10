@@ -26,6 +26,8 @@ jobs:
   foundry:
     name: Foundry (build, lint, test)
     runs-on: ubuntu-latest
+    permissions:
+      contents: write # needed to publish the coverage badge branch
     steps:
       - name: Check out repository (with submodules)
         uses: actions/checkout@v4
@@ -57,12 +59,22 @@ jobs:
       - name: Generate coverage (lcov)
         run: forge coverage --report lcov
 
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v5
-        with:
-          files: ./lcov.info
-          fail_ci_if_error: false
-          token: ${{ secrets.CODECOV_TOKEN }}
+      - name: Compute coverage badge
+        run: bash scripts/coverage-badge.sh lcov.info badge/coverage.json
+
+      - name: Publish coverage badge (main only)
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cd badge
+          git init -q
+          git checkout -q -b badges
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add coverage.json
+          git commit -qm "Update coverage badge [skip ci]"
+          git push -f "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" badges
 
   # ---------------------------------------------------------------------------
   # Verity (Lean 4): overlay the model into a pinned Verity checkout and
