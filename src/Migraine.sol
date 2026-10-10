@@ -6,13 +6,13 @@ import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
-/// @title FixedRateRedeemer
+/// @title Migraine
 /// @notice One-way, fixed-rate, permissionless redemption of `tokenA` for `tokenB`.
 /// @dev The contract never holds tokens. `tokenA` is pulled from the caller into a
 ///      separate vault wallet, and `tokenB` is pushed from that wallet to the caller.
 ///      The vault wallet must approve this contract for `tokenB`, and callers must
 ///      approve it for `tokenA`. All configuration is immutable.
-contract FixedRateRedeemer is ReentrancyGuard {
+contract Migraine is ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     /// @notice Token users give up. Pulled from the caller to the vault wallet.

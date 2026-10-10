@@ -1,29 +1,29 @@
 /-
-  Basic correctness proofs for the `FixedRateRedeemer` reference model.
+  Basic correctness proofs for the `Migraine` reference model.
 
   `redeem_meets_spec` is the load-bearing theorem: every successful redemption
   debits the inventory by exactly the fixed-rate payout, credits the cumulative
   redeemed amount by exactly the input, and leaves all other state untouched.
 -/
 
-import Contracts.FixedRateRedeemer.Spec
-import Contracts.FixedRateRedeemer.Invariants
+import Contracts.Migraine.Spec
+import Contracts.Migraine.Invariants
 import Verity.Proofs.Stdlib.Math
 import Verity.Proofs.Stdlib.Automation
 
 set_option linter.unusedSimpArgs false
 set_option linter.unusedVariables false
 
-namespace Contracts.FixedRateRedeemer.Proofs
+namespace Contracts.Migraine.Proofs
 
 open Verity
 open Verity.EVM.Uint256
 open Verity.Stdlib.Math
 open Verity.Proofs.Stdlib.Math (safeAdd_some safeSub_some)
 open Verity.Proofs.Stdlib.Automation (uint256_ge_val_le)
-open Contracts.FixedRateRedeemer
-open Contracts.FixedRateRedeemer.Spec
-open Contracts.FixedRateRedeemer.Invariants
+open Contracts.Migraine
+open Contracts.Migraine.Spec
+open Contracts.Migraine.Invariants
 
 /-! ## preview -/
 
@@ -119,4 +119,4 @@ theorem redeem_debits_payout (s : ContractState) (amountA : Uint256)
   simp only [redeem_spec] at h
   exact ⟨h.1, h.2.1⟩
 
-end Contracts.FixedRateRedeemer.Proofs
+end Contracts.Migraine.Proofs

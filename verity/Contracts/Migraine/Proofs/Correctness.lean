@@ -1,23 +1,23 @@
 /-
-  Correctness properties for the `FixedRateRedeemer` reference model:
+  Correctness properties for the `Migraine` reference model:
   guard behaviour and well-formedness.
 -/
 
-import Contracts.FixedRateRedeemer.Proofs.Basic
+import Contracts.Migraine.Proofs.Basic
 import Verity.Proofs.Stdlib.Automation
 
 set_option linter.unusedSimpArgs false
 set_option linter.unusedVariables false
 
-namespace Contracts.FixedRateRedeemer.Proofs.Correctness
+namespace Contracts.Migraine.Proofs.Correctness
 
 open Verity
 open Verity.EVM.Uint256
 open Verity.Stdlib.Math
-open Contracts.FixedRateRedeemer
-open Contracts.FixedRateRedeemer.Spec
-open Contracts.FixedRateRedeemer.Proofs
-open Contracts.FixedRateRedeemer.Invariants
+open Contracts.Migraine
+open Contracts.Migraine.Spec
+open Contracts.Migraine.Proofs
+open Contracts.Migraine.Invariants
 
 /-! ## Guard behaviour -/
 
@@ -74,4 +74,4 @@ theorem redeem_preserves_wellformedness (s : ContractState) (amountA : Uint256)
   · rw [h_ctx.2.1]
     exact h_wf.contract_nonzero
 
-end Contracts.FixedRateRedeemer.Proofs.Correctness
+end Contracts.Migraine.Proofs.Correctness

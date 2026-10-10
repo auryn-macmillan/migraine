@@ -1,5 +1,5 @@
 /-
-  Formal specifications for the `FixedRateRedeemer` reference model.
+  Formal specifications for the `Migraine` reference model.
 
   The two accounting slots are fixed:
     slot 0 = `remainingInventoryB`
@@ -10,15 +10,15 @@ import Verity.Specs.Common
 import Verity.Macro
 import Verity.EVM.Uint256
 import Verity.Stdlib.Math
-import Contracts.FixedRateRedeemer.FixedRateRedeemer
+import Contracts.Migraine.Migraine
 
-namespace Contracts.FixedRateRedeemer.Spec
+namespace Contracts.Migraine.Spec
 
 open Verity
 open Verity.Specs
 open Verity.EVM.Uint256
 open Verity.Stdlib.Math
-open Contracts.FixedRateRedeemer
+open Contracts.Migraine
 
 /-- The payout formula at the immutable rate: `floor(amountA * num / den)`. -/
 def payout (amountA : Uint256) : Uint256 :=
@@ -63,4 +63,4 @@ def inventory_never_increases (s s' : ContractState) : Prop :=
 def redeemed_monotone (s s' : ContractState) : Prop :=
   (s.storage 1 : Nat) ≤ (s'.storage 1 : Nat)
 
-end Contracts.FixedRateRedeemer.Spec
+end Contracts.Migraine.Spec

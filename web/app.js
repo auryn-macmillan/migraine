@@ -1,8 +1,8 @@
-/* FixedRateRedeemer frontend logic (ethers v6). */
+/* Migraine frontend logic (ethers v6). */
 (() => {
   "use strict";
 
-  const CONFIG = window.REDEEMER_CONFIG || {};
+  const CONFIG = window.MIGRAINE_CONFIG || {};
   const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 
   const REDEEMER_ABI = [

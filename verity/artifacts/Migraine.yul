@@ -1,4 +1,4 @@
-object "FixedRateRedeemer" {
+object "Migraine" {
     code {
         mstore(64, 128)
         if callvalue() {

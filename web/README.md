@@ -1,7 +1,7 @@
-# FixedRateRedeemer web frontend
+# Migraine web frontend
 
 A tiny, dependency-free (ethers-v6-from-CDN) static UI for the
-`FixedRateRedeemer` contract.
+`Migraine` contract.
 
 ## Run it
 
@@ -18,7 +18,7 @@ Any static file server works. There is no build step.
 Edit `config.js`:
 
 ```js
-window.REDEEMER_CONFIG = {
+window.MIGRAINE_CONFIG = {
   contractAddress: "0xYourDeployedRedeemer",
   chainId: null,          // e.g. 1, 11155111, 31337; null disables the check
   rpcUrl: null            // optional read-only RPC fallback

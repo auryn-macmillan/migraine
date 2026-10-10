@@ -1,11 +1,11 @@
-/* FixedRateRedeemer frontend configuration.
+/* Migraine frontend configuration.
  *
  * Fill in `contractAddress` after deploying the contract. `rpcUrl` and `chainId`
  * are optional: when a browser wallet (MetaMask) is connected it is used for all
  * reads/writes; the RPC URL is only used as a read-only fallback.
  */
-window.REDEEMER_CONFIG = {
-  // Address of the deployed FixedRateRedeemer contract.
+window.MIGRAINE_CONFIG = {
+  // Address of the deployed Migraine contract.
   contractAddress: "0x0000000000000000000000000000000000000000",
 
   // Optional: expected chain id. Set to null to skip the network check.

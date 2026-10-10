@@ -1,20 +1,20 @@
-# Verity formalization — `FixedRateRedeemer`
+# Verity formalization — `Migraine`
 
 This directory holds a [Verity](https://veritylang.com/) formal specification,
-reference model and machine-checked proofs for the `FixedRateRedeemer` contract.
+reference model and machine-checked proofs for the `Migraine` contract.
 Verity is a Lean 4 EDSL that compiles smart contracts to EVM bytecode and ties
 each implementation to a `Prop`-valued specification with a proof.
 
 ## Files
 
 ```
-Contracts/FixedRateRedeemer/
-  FixedRateRedeemer.lean     reference model (`verity_contract` block)
+Contracts/Migraine/
+  Migraine.lean     reference model (`verity_contract` block)
   Spec.lean                  formal specification (`redeem_spec`, `preview_spec`, ...)
   Invariants.lean            well-formedness invariant
   Proofs/Basic.lean          `redeem_meets_spec`, `preview_meets_spec`, ...
   Proofs/Correctness.lean    guard/revert behaviour, well-formedness
-Contracts/FixedRateRedeemer.lean   module re-export
+Contracts/Migraine.lean   module re-export
 ```
 
 ## What is proven
@@ -71,27 +71,27 @@ Clone Verity and copy these files in:
 
 ```bash
 git clone https://github.com/lfglabs-dev/verity.git
-cp -r verity/Contracts/FixedRateRedeemer      verity/Contracts/
-cp    verity/Contracts/FixedRateRedeemer.lean verity/Contracts/
+cp -r verity/Contracts/Migraine      verity/Contracts/
+cp    verity/Contracts/Migraine.lean verity/Contracts/
 ```
 
 Then register the module (three one-line edits):
 
 1. `lakefile.lean` — add to the `Contracts` library globs:
    ```lean
-   .andSubmodules `Contracts.FixedRateRedeemer,
+   .andSubmodules `Contracts.Migraine,
    ```
 2. `Contracts.lean` — add:
    ```lean
-   import Contracts.FixedRateRedeemer
+   import Contracts.Migraine
    ```
 3. `Contracts/Specs.lean` — add the import and the generated compiler model:
    ```lean
-   import Contracts.FixedRateRedeemer
+   import Contracts.Migraine
    -- ...
    def allSpecs : List CompilationModel := [
      -- ...
-     Contracts.FixedRateRedeemer.spec,
+     Contracts.Migraine.spec,
      -- ...
    ]
    ```
@@ -99,20 +99,20 @@ Then register the module (three one-line edits):
 Then verify the proofs and compile the artifact:
 
 ```bash
-lake build Contracts.FixedRateRedeemer.Proofs.Correctness
-lake exe verity-compiler --manifest fixedrate.manifest -o artifacts/yul
-grep -r "sorry" Contracts/FixedRateRedeemer/   # should be empty
+lake build Contracts.Migraine.Proofs.Correctness
+lake exe verity-compiler --manifest migraine.manifest -o artifacts/yul
+grep -r "sorry" Contracts/Migraine/   # should be empty
 ```
 
-where `fixedrate.manifest` contains one line:
+where `migraine.manifest` contains one line:
 
 ```
-Contracts.FixedRateRedeemer.FixedRateRedeemer
+Contracts.Migraine.Migraine
 ```
 
 This repository was verified against Verity `leanprover/lean4:v4.31.0`: the
 whole `Contracts` library builds successfully and the compiler emits
-[`artifacts/FixedRateRedeemer.yul`](./artifacts/FixedRateRedeemer.yul). The
+[`artifacts/Migraine.yul`](./artifacts/Migraine.yul). The
 generated runtime performs the guards and the fixed-rate math exactly as
 specified, e.g. `amountB := div(mul(amountA, 25), 10)`.
 

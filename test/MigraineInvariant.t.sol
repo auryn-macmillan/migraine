@@ -5,12 +5,12 @@ import {Test} from "forge-std/Test.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 
-import {FixedRateRedeemer} from "../src/FixedRateRedeemer.sol";
+import {Migraine} from "../src/Migraine.sol";
 import {MockERC20} from "./mocks/MockERC20.sol";
 
 /// @notice Drives random redemptions and records ghost totals for the invariant test.
-contract RedeemerHandler is Test {
-    FixedRateRedeemer public immutable redeemer;
+contract MigraineHandler is Test {
+    Migraine public immutable redeemer;
     MockERC20 public immutable tokenA;
     MockERC20 public immutable tokenB;
     address public immutable vault;
@@ -23,14 +23,7 @@ contract RedeemerHandler is Test {
     uint256 public ghostTotalBOut;
     uint256 public ghostInjectedB;
 
-    constructor(
-        FixedRateRedeemer redeemer_,
-        MockERC20 tokenA_,
-        MockERC20 tokenB_,
-        address vault_,
-        uint256 num,
-        uint256 den
-    ) {
+    constructor(Migraine redeemer_, MockERC20 tokenA_, MockERC20 tokenB_, address vault_, uint256 num, uint256 den) {
         redeemer = redeemer_;
         tokenA = tokenA_;
         tokenB = tokenB_;
@@ -74,12 +67,12 @@ contract RedeemerHandler is Test {
     }
 }
 
-contract FixedRateRedeemerInvariantTest is Test {
+contract MigraineInvariantTest is Test {
     MockERC20 internal tokenA;
     MockERC20 internal tokenB;
     address internal vault;
-    FixedRateRedeemer internal redeemer;
-    RedeemerHandler internal handler;
+    Migraine internal redeemer;
+    MigraineHandler internal handler;
 
     uint256 internal constant RATE_NUM = 3;
     uint256 internal constant RATE_DEN = 2;
@@ -89,13 +82,13 @@ contract FixedRateRedeemerInvariantTest is Test {
         tokenB = new MockERC20("Token B", "BBB", 18);
         vault = makeAddr("vault");
 
-        redeemer = new FixedRateRedeemer(IERC20(address(tokenA)), IERC20(address(tokenB)), vault, RATE_NUM, RATE_DEN);
+        redeemer = new Migraine(IERC20(address(tokenA)), IERC20(address(tokenB)), vault, RATE_NUM, RATE_DEN);
 
-        handler = new RedeemerHandler(redeemer, tokenA, tokenB, vault, RATE_NUM, RATE_DEN);
+        handler = new MigraineHandler(redeemer, tokenA, tokenB, vault, RATE_NUM, RATE_DEN);
 
         targetContract(address(handler));
         bytes4[] memory selectors = new bytes4[](1);
-        selectors[0] = RedeemerHandler.redeem.selector;
+        selectors[0] = MigraineHandler.redeem.selector;
         targetSelector(FuzzSelector({addr: address(handler), selectors: selectors}));
     }
 

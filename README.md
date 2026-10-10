@@ -1,6 +1,8 @@
-# FixedRateRedeemer
+# Migraine
 
 [![CI](https://github.com/auryn-macmillan/migraine/actions/workflows/ci.yml/badge.svg)](https://github.com/auryn-macmillan/migraine/actions/workflows/ci.yml)
+
+> *Migraine* — because migrating from token A to token B is normally such a pain.
 
 A small, immutable, permissionless on-chain exchange: anyone can redeem
 **token A** for **token B** at a **fixed rate**, in one direction only. The
@@ -24,11 +26,11 @@ This repository contains four deliverables:
      ▲                                               │ (e.g. Gnosis  │
      │            token B                            │   Safe)       │
      └───────────────────────────────────────────    └───────────────┘
-                    FixedRateRedeemer (never holds tokens)
+                    Migraine (never holds tokens)
 ```
 
-1. The user approves `FixedRateRedeemer` to spend `tokenA`.
-2. The vault wallet approves `FixedRateRedeemer` to spend `tokenB` (its
+1. The user approves `Migraine` to spend `tokenA`.
+2. The vault wallet approves `Migraine` to spend `tokenB` (its
    allowance is the hard on-chain cap).
 3. The user calls `redeem(amountA)`:
    - `amountB = floor(amountA * rateNumerator / rateDenominator)`
@@ -43,12 +45,12 @@ owner, no pause and no way to run the exchange in reverse.
 ## Layout
 
 ```
-src/FixedRateRedeemer.sol          the contract
+src/Migraine.sol          the contract
 script/Deploy.s.sol                deployment script (env-var configured)
 test/
-  FixedRateRedeemer.t.sol          unit + fuzz tests
-  FixedRateRedeemerIntegration.t.sol   end-to-end lifecycle with a contract vault
-  FixedRateRedeemerInvariant.t.sol     stateful invariant tests
+  Migraine.t.sol          unit + fuzz tests
+  MigraineIntegration.t.sol   end-to-end lifecycle with a contract vault
+  MigraineInvariant.t.sol     stateful invariant tests
   mocks/                           MockERC20, MockSafeWallet, ReentrantERC20
   utils/TestBase.sol               shared fixture
 web/                               static frontend (ethers v6)
@@ -94,7 +96,7 @@ forge script script/Deploy.s.sol --rpc-url "$RPC_URL" --broadcast
 Before users can redeem, the vault wallet must:
 
 1. hold enough `tokenB` to cover the entire redeemable supply of `tokenA`, and
-2. execute an ERC-20 `approve(FixedRateRedeemer, allowance)` transaction on
+2. execute an ERC-20 `approve(Migraine, allowance)` transaction on
    `tokenB`.
 
 The allowance is the effective cap: the redeemer can never pay out more `tokenB`
@@ -132,10 +134,10 @@ pull request:
 - **Foundry** — `forge fmt --check`, `forge build`, `forge lint` and the full
   unit/integration/fuzz/invariant test suite.
 - **Verity** — installs the Lean toolchain, clones Verity at a pinned revision,
-  overlays the `FixedRateRedeemer` model via `scripts/ci-verity.sh`, builds the
-  proofs (`lake build Contracts.FixedRateRedeemer.Proofs.Correctness`), fails on
+  overlays the `Migraine` model via `scripts/ci-verity.sh`, builds the
+  proofs (`lake build Contracts.Migraine.Proofs.Correctness`), fails on
   any `sorry`/`admit`, registers the compiler model and emits
-  `FixedRateRedeemer.yul` as a build artifact.
+  `Migraine.yul` as a build artifact.
 
 ## Security notes and assumptions
 

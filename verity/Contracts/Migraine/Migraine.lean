@@ -7,9 +7,9 @@ open Verity.EVM.Uint256
 open Verity.Stdlib.Math
 
 /-!
-# `FixedRateRedeemer` — reference model
+# `Migraine` — reference model
 
-The deployed Solidity contract (`src/FixedRateRedeemer.sol`) is *stateless*: it
+The deployed Solidity contract (`src/Migraine.sol`) is *stateless*: it
 moves `tokenA` from the caller to an immutable vault wallet and `tokenB` from
 that wallet back to the caller using two `transferFrom` calls. External-call
 mechanics sit on Verity's documented trust boundary, so that they can be
@@ -35,7 +35,7 @@ The rate is a pair of compile-time constants, mirroring the Solidity
 See `../README.md` for the exact correspondence to the Solidity contract and
 the trust-boundary split.
 -/
-verity_contract FixedRateRedeemer where
+verity_contract Migraine where
   storage
     remainingInventoryB : Uint256 := slot 0
     totalRedeemedA       : Uint256 := slot 1

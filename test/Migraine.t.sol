@@ -5,12 +5,12 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 
-import {FixedRateRedeemer} from "../src/FixedRateRedeemer.sol";
+import {Migraine} from "../src/Migraine.sol";
 import {MockERC20} from "./mocks/MockERC20.sol";
 import {ReentrantERC20} from "./mocks/ReentrantERC20.sol";
 import {TestBase} from "./utils/TestBase.sol";
 
-contract FixedRateRedeemerTest is TestBase {
+contract MigraineTest is TestBase {
     // ---------------------------------------------------------------------
     // Constructor
     // ---------------------------------------------------------------------
@@ -24,40 +24,40 @@ contract FixedRateRedeemerTest is TestBase {
     }
 
     function test_Constructor_RevertsOnZeroTokenA() public {
-        vm.expectRevert(FixedRateRedeemer.ZeroAddress.selector);
-        new FixedRateRedeemer(IERC20(address(0)), IERC20(address(tokenB)), vault, 1, 1);
+        vm.expectRevert(Migraine.ZeroAddress.selector);
+        new Migraine(IERC20(address(0)), IERC20(address(tokenB)), vault, 1, 1);
     }
 
     function test_Constructor_RevertsOnZeroTokenB() public {
-        vm.expectRevert(FixedRateRedeemer.ZeroAddress.selector);
-        new FixedRateRedeemer(IERC20(address(tokenA)), IERC20(address(0)), vault, 1, 1);
+        vm.expectRevert(Migraine.ZeroAddress.selector);
+        new Migraine(IERC20(address(tokenA)), IERC20(address(0)), vault, 1, 1);
     }
 
     function test_Constructor_RevertsOnIdenticalTokens() public {
-        vm.expectRevert(FixedRateRedeemer.IdenticalTokens.selector);
-        new FixedRateRedeemer(IERC20(address(tokenA)), IERC20(address(tokenA)), vault, 1, 1);
+        vm.expectRevert(Migraine.IdenticalTokens.selector);
+        new Migraine(IERC20(address(tokenA)), IERC20(address(tokenA)), vault, 1, 1);
     }
 
     function test_Constructor_RevertsOnZeroWallet() public {
-        vm.expectRevert(FixedRateRedeemer.ZeroWallet.selector);
-        new FixedRateRedeemer(IERC20(address(tokenA)), IERC20(address(tokenB)), address(0), 1, 1);
+        vm.expectRevert(Migraine.ZeroWallet.selector);
+        new Migraine(IERC20(address(tokenA)), IERC20(address(tokenB)), address(0), 1, 1);
     }
 
     function test_Constructor_RevertsOnZeroRateNumerator() public {
-        vm.expectRevert(FixedRateRedeemer.InvalidRate.selector);
-        new FixedRateRedeemer(IERC20(address(tokenA)), IERC20(address(tokenB)), vault, 0, 1);
+        vm.expectRevert(Migraine.InvalidRate.selector);
+        new Migraine(IERC20(address(tokenA)), IERC20(address(tokenB)), vault, 0, 1);
     }
 
     function test_Constructor_RevertsOnZeroRateDenominator() public {
-        vm.expectRevert(FixedRateRedeemer.InvalidRate.selector);
-        new FixedRateRedeemer(IERC20(address(tokenA)), IERC20(address(tokenB)), vault, 1, 0);
+        vm.expectRevert(Migraine.InvalidRate.selector);
+        new Migraine(IERC20(address(tokenA)), IERC20(address(tokenB)), vault, 1, 0);
     }
 
     function test_Constructor_RevertsOnWalletIsSelf() public {
         // The wallet cannot be the redeemer itself.
         address predicted = vm.computeCreateAddress(address(this), vm.getNonce(address(this)));
-        vm.expectRevert(FixedRateRedeemer.WalletIsSelf.selector);
-        new FixedRateRedeemer(IERC20(address(tokenA)), IERC20(address(tokenB)), predicted, 1, 1);
+        vm.expectRevert(Migraine.WalletIsSelf.selector);
+        new Migraine(IERC20(address(tokenA)), IERC20(address(tokenB)), predicted, 1, 1);
     }
 
     // ---------------------------------------------------------------------
@@ -80,7 +80,7 @@ contract FixedRateRedeemerTest is TestBase {
 
     function test_PreviewRedeem_DecimalMismatch() public {
         // 1 tokenA (18 dec) should buy 5 tokenB (6 dec): 1e18 * 5 / 1e12 = 5e6.
-        FixedRateRedeemer r = new FixedRateRedeemer(IERC20(address(tokenA)), IERC20(address(tokenB)), vault, 5, 1e12);
+        Migraine r = new Migraine(IERC20(address(tokenA)), IERC20(address(tokenB)), vault, 5, 1e12);
         assertEq(r.previewRedeem(1e18), 5e6);
         assertEq(r.previewRedeem(5e17), 25e5); // 2.5 tokenB
     }
@@ -154,16 +154,16 @@ contract FixedRateRedeemerTest is TestBase {
 
     function test_Redeem_RevertsOnZeroAmount() public {
         vm.prank(alice);
-        vm.expectRevert(FixedRateRedeemer.ZeroAmount.selector);
+        vm.expectRevert(Migraine.ZeroAmount.selector);
         redeemer.redeem(0);
     }
 
     function test_Redeem_RevertsOnZeroOutput() public {
         // Rate 1/2 makes a 1-unit redemption round down to zero tokenB.
-        FixedRateRedeemer r = new FixedRateRedeemer(IERC20(address(tokenA)), IERC20(address(tokenB)), vault, 1, 2);
+        Migraine r = new Migraine(IERC20(address(tokenA)), IERC20(address(tokenB)), vault, 1, 2);
         _fundVault(1_000e18);
         vm.prank(alice);
-        vm.expectRevert(FixedRateRedeemer.ZeroOutput.selector);
+        vm.expectRevert(Migraine.ZeroOutput.selector);
         r.redeem(1); // 1 * 1 / 2 = 0
     }
 
@@ -216,8 +216,7 @@ contract FixedRateRedeemerTest is TestBase {
         ReentrantERC20 malicious = new ReentrantERC20();
         MockERC20 honest = new MockERC20("Honest", "HON", 18);
 
-        FixedRateRedeemer r =
-            new FixedRateRedeemer(IERC20(address(malicious)), IERC20(address(honest)), vault, RATE_NUM, RATE_DEN);
+        Migraine r = new Migraine(IERC20(address(malicious)), IERC20(address(honest)), vault, RATE_NUM, RATE_DEN);
 
         malicious.configure(address(r), 1);
         malicious.mint(alice, 100e18);

@@ -1,8 +1,8 @@
-# Plain-Language Specification — `FixedRateRedeemer`
+# Plain-Language Specification — `Migraine`
 
 ## 1. Purpose
 
-`FixedRateRedeemer` is a small, immutable, trust-minimised smart contract that
+`Migraine` is a small, immutable, trust-minimised smart contract that
 lets **anyone** exchange one ERC-20 token (`tokenA`) for another (`tokenB`) at a
 **fixed rate**, in exactly **one direction**. The token being received by users
 (`tokenB`) does **not** live in the redeemer contract; it lives in a separate
@@ -13,9 +13,9 @@ orchestrator: it never custodies tokens, not even for a single block.
 
 | Actor | Description |
 | --- | --- |
-| **Redeemer (user)** | Any address. Holds `tokenA`, wants `tokenB`. Must approve `FixedRateRedeemer` to pull `tokenA`. |
-| **Vault wallet** | A separate contract account (e.g. Gnosis Safe) that holds the `tokenB` inventory and receives all `tokenA`. Must approve `FixedRateRedeemer` to pull `tokenB`. |
-| **`FixedRateRedeemer`** | This contract. Holds no tokens at any point. Immutable parameters. No owner, no admin, no pause. |
+| **Redeemer (user)** | Any address. Holds `tokenA`, wants `tokenB`. Must approve `Migraine` to pull `tokenA`. |
+| **Vault wallet** | A separate contract account (e.g. Gnosis Safe) that holds the `tokenB` inventory and receives all `tokenA`. Must approve `Migraine` to pull `tokenB`. |
+| **`Migraine`** | This contract. Holds no tokens at any point. Immutable parameters. No owner, no admin, no pause. |
 
 ## 3. Configuration (set once at deployment, immutable forever)
 
@@ -68,7 +68,7 @@ wallet after deployment. The ABI contains a single state-changing method:
 
 ### FR-4 — No custody
 At the end of every successful call, and at every instant in between, the
-`FixedRateRedeemer` contract's balance of `tokenA` and of `tokenB` is zero. It
+`Migraine` contract's balance of `tokenA` and of `tokenB` is zero. It
 only ever moves tokens directly between the user and the vault wallet.
 
 ## 5. Preconditions and revert conditions

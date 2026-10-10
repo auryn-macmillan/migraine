@@ -4,16 +4,16 @@ pragma solidity 0.8.24;
 import {Test} from "forge-std/Test.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
-import {FixedRateRedeemer} from "../src/FixedRateRedeemer.sol";
+import {Migraine} from "../src/Migraine.sol";
 import {MockERC20} from "./mocks/MockERC20.sol";
 import {MockSafeWallet} from "./mocks/MockSafeWallet.sol";
 
 /// @notice End-to-end lifecycle with a real contract vault wallet (Safe-like).
-contract FixedRateRedeemerIntegrationTest is Test {
+contract MigraineIntegrationTest is Test {
     MockERC20 internal tokenA;
     MockERC20 internal tokenB;
     MockSafeWallet internal safe;
-    FixedRateRedeemer internal redeemer;
+    Migraine internal redeemer;
 
     address internal safeOwner;
     address internal alice;
@@ -35,8 +35,7 @@ contract FixedRateRedeemerIntegrationTest is Test {
         carol = makeAddr("carol");
 
         safe = new MockSafeWallet(safeOwner);
-        redeemer =
-            new FixedRateRedeemer(IERC20(address(tokenA)), IERC20(address(tokenB)), address(safe), RATE_NUM, RATE_DEN);
+        redeemer = new Migraine(IERC20(address(tokenA)), IERC20(address(tokenB)), address(safe), RATE_NUM, RATE_DEN);
     }
 
     function _stockSafe(uint256 amountB) internal {
@@ -149,7 +148,7 @@ contract FixedRateRedeemerIntegrationTest is Test {
         // Address of the redeemer is not yet known when constructing; simulate by
         // deploying with a placeholder and asserting a direct self reference fails.
         address self = vm.computeCreateAddress(address(this), vm.getNonce(address(this)));
-        vm.expectRevert(FixedRateRedeemer.WalletIsSelf.selector);
-        new FixedRateRedeemer(IERC20(address(tokenA)), IERC20(address(tokenB)), self, 1, 1);
+        vm.expectRevert(Migraine.WalletIsSelf.selector);
+        new Migraine(IERC20(address(tokenA)), IERC20(address(tokenB)), self, 1, 1);
     }
 }

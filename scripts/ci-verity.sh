@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Overlay the FixedRateRedeemer Verity sources into a Verity checkout and
+# Overlay the Migraine Verity sources into a Verity checkout and
 # register the new contract with the build and the compiler.
 #
 # Usage: scripts/ci-verity.sh <path-to-verity-checkout>
@@ -18,9 +18,9 @@ if [[ ! -f "$VERITY_DIR/lakefile.lean" ]]; then
 fi
 
 # 1. Copy the contract, spec, invariants, proofs and module re-export.
-rm -rf "$VERITY_DIR/Contracts/FixedRateRedeemer"
-cp -r "$REPO_ROOT/verity/Contracts/FixedRateRedeemer" "$VERITY_DIR/Contracts/"
-cp "$REPO_ROOT/verity/Contracts/FixedRateRedeemer.lean" "$VERITY_DIR/Contracts/"
+rm -rf "$VERITY_DIR/Contracts/Migraine"
+cp -r "$REPO_ROOT/verity/Contracts/Migraine" "$VERITY_DIR/Contracts/"
+cp "$REPO_ROOT/verity/Contracts/Migraine.lean" "$VERITY_DIR/Contracts/"
 
 # 2. Register the module with the build + compiler (idempotent string edits).
 python3 - "$VERITY_DIR" <<'PY'
@@ -43,20 +43,20 @@ def insert_after(path: Path, anchor: str, addition: str) -> None:
 insert_after(
     root / "lakefile.lean",
     "    .andSubmodules `Contracts.Ledger,",
-    "    .andSubmodules `Contracts.FixedRateRedeemer,",
+    "    .andSubmodules `Contracts.Migraine,",
 )
 
 # Contracts.lean: import the module into the umbrella.
 insert_after(
     root / "Contracts.lean",
     "import Contracts.Ledger",
-    "import Contracts.FixedRateRedeemer",
+    "import Contracts.Migraine",
 )
 
 # Contracts/Specs.lean: import + register the generated CompilationModel.
 specs = root / "Contracts" / "Specs.lean"
-insert_after(specs, "import Contracts.Ledger", "import Contracts.FixedRateRedeemer")
-insert_after(specs, "  Contracts.Ledger.spec,", "  Contracts.FixedRateRedeemer.spec,")
+insert_after(specs, "import Contracts.Ledger", "import Contracts.Migraine")
+insert_after(specs, "  Contracts.Ledger.spec,", "  Contracts.Migraine.spec,")
 PY
 
-echo "FixedRateRedeemer overlaid into $VERITY_DIR"
+echo "Migraine overlaid into $VERITY_DIR"

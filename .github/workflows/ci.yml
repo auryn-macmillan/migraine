@@ -89,20 +89,20 @@ jobs:
           restore-keys: |
             verity-${{ runner.os }}-${{ env.VERITY_REV }}-
 
-      - name: Overlay FixedRateRedeemer and register with the build
+      - name: Overlay Migraine and register with the build
         run: bash scripts/ci-verity.sh verity-upstream
 
       - name: Build the formal specification and proofs
         working-directory: verity-upstream
         run: |
-          lake build Contracts.FixedRateRedeemer.Proofs.Correctness
-          lake build Contracts.FixedRateRedeemer
+          lake build Contracts.Migraine.Proofs.Correctness
+          lake build Contracts.Migraine
 
       - name: Fail on any sorry / admit
         working-directory: verity-upstream
         run: |
-          if grep -rnE '\bsorry\b|\badmit\b' Contracts/FixedRateRedeemer/; then
-            echo "::error::Found sorry/admit in the FixedRateRedeemer proofs"
+          if grep -rnE '\bsorry\b|\badmit\b' Contracts/Migraine/; then
+            echo "::error::Found sorry/admit in the Migraine proofs"
             exit 1
           fi
           echo "No sorry/admit found."
@@ -111,14 +111,14 @@ jobs:
         working-directory: verity-upstream
         run: |
           lake build Contracts.Specs
-          printf 'Contracts.FixedRateRedeemer.FixedRateRedeemer\n' > fixedrate.manifest
-          lake exe verity-compiler --manifest fixedrate.manifest -o artifacts/yul
-          test -f artifacts/yul/FixedRateRedeemer.yul
-          echo "Emitted artifacts/yul/FixedRateRedeemer.yul"
+          printf 'Contracts.Migraine.Migraine\n' > migraine.manifest
+          lake exe verity-compiler --manifest migraine.manifest -o artifacts/yul
+          test -f artifacts/yul/Migraine.yul
+          echo "Emitted artifacts/yul/Migraine.yul"
 
       - name: Upload generated Yul artifact
         uses: actions/upload-artifact@v4
         with:
-          name: FixedRateRedeemer-yul
-          path: verity-upstream/artifacts/yul/FixedRateRedeemer.yul
+          name: Migraine-yul
+          path: verity-upstream/artifacts/yul/Migraine.yul
           if-no-files-found: error
