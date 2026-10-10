@@ -1,0 +1,124 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Verity revision the proofs were developed and verified against.
+  VERITY_REPO: https://github.com/lfglabs-dev/verity.git
+  VERITY_REV: 203a1788f38e1e6f157a0ec8d233bbf2ac789e18
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Solidity: build, format, lint, unit/integration/fuzz/invariant tests.
+  # ---------------------------------------------------------------------------
+  foundry:
+    name: Foundry (build, lint, test)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository (with submodules)
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: stable
+
+      - name: Show versions
+        run: |
+          forge --version
+          cast --version
+
+      - name: Check formatting
+        run: forge fmt --check
+
+      - name: Build
+        run: forge build --sizes
+
+      - name: Lint
+        run: forge lint
+
+      - name: Run tests
+        run: forge test -vvv
+
+  # ---------------------------------------------------------------------------
+  # Verity (Lean 4): overlay the model into a pinned Verity checkout and
+  # machine-check the proofs, then compile the model to Yul.
+  # ---------------------------------------------------------------------------
+  verity:
+    name: Verity (Lean proofs + Yul)
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install elan (Lean toolchain manager)
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh \
+            | sh -s -- -y --default-toolchain none
+          echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
+
+      - name: Clone Verity at the pinned revision
+        run: |
+          git clone "$VERITY_REPO" verity-upstream
+          git -C verity-upstream checkout "$VERITY_REV"
+          cat verity-upstream/lean-toolchain
+
+      - name: Cache Lean toolchain, Mathlib and build artifacts
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.elan
+            ~/.cache/mathlib
+            verity-upstream/.lake
+          key: verity-${{ runner.os }}-${{ env.VERITY_REV }}-${{ hashFiles('verity/Contracts/**', 'scripts/ci-verity.sh') }}
+          restore-keys: |
+            verity-${{ runner.os }}-${{ env.VERITY_REV }}-
+
+      - name: Overlay FixedRateRedeemer and register with the build
+        run: bash scripts/ci-verity.sh verity-upstream
+
+      - name: Build the formal specification and proofs
+        working-directory: verity-upstream
+        run: |
+          lake build Contracts.FixedRateRedeemer.Proofs.Correctness
+          lake build Contracts.FixedRateRedeemer
+
+      - name: Fail on any sorry / admit
+        working-directory: verity-upstream
+        run: |
+          if grep -rnE '\bsorry\b|\badmit\b' Contracts/FixedRateRedeemer/; then
+            echo "::error::Found sorry/admit in the FixedRateRedeemer proofs"
+            exit 1
+          fi
+          echo "No sorry/admit found."
+
+      - name: Verify compiler registration and emit Yul
+        working-directory: verity-upstream
+        run: |
+          lake build Contracts.Specs
+          printf 'Contracts.FixedRateRedeemer.FixedRateRedeemer\n' > fixedrate.manifest
+          lake exe verity-compiler --manifest fixedrate.manifest -o artifacts/yul
+          test -f artifacts/yul/FixedRateRedeemer.yul
+          echo "Emitted artifacts/yul/FixedRateRedeemer.yul"
+
+      - name: Upload generated Yul artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: FixedRateRedeemer-yul
+          path: verity-upstream/artifacts/yul/FixedRateRedeemer.yul
+          if-no-files-found: error

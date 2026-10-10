@@ -1,5 +1,7 @@
 # FixedRateRedeemer
 
+[![CI](https://github.com/auryn-macmillan/migraine/actions/workflows/ci.yml/badge.svg)](https://github.com/auryn-macmillan/migraine/actions/workflows/ci.yml)
+
 A small, immutable, permissionless on-chain exchange: anyone can redeem
 **token A** for **token B** at a **fixed rate**, in one direction only. The
 token B inventory lives in a separate vault wallet (e.g. a Gnosis Safe), and the
@@ -121,6 +123,19 @@ and preserves all other state.
 
 See [`verity/README.md`](./verity/README.md) for what is proven, what sits on
 Verity's trusted boundary, and how to build it inside a Verity checkout.
+
+## Continuous integration
+
+[`.github/workflows/ci.yml`](./.github/workflows/ci.yml) runs on every push and
+pull request:
+
+- **Foundry** — `forge fmt --check`, `forge build`, `forge lint` and the full
+  unit/integration/fuzz/invariant test suite.
+- **Verity** — installs the Lean toolchain, clones Verity at a pinned revision,
+  overlays the `FixedRateRedeemer` model via `scripts/ci-verity.sh`, builds the
+  proofs (`lake build Contracts.FixedRateRedeemer.Proofs.Correctness`), fails on
+  any `sorry`/`admit`, registers the compiler model and emits
+  `FixedRateRedeemer.yul` as a build artifact.
 
 ## Security notes and assumptions
 
