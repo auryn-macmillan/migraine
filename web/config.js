@@ -1,0 +1,16 @@
+/* FixedRateRedeemer frontend configuration.
+ *
+ * Fill in `contractAddress` after deploying the contract. `rpcUrl` and `chainId`
+ * are optional: when a browser wallet (MetaMask) is connected it is used for all
+ * reads/writes; the RPC URL is only used as a read-only fallback.
+ */
+window.REDEEMER_CONFIG = {
+  // Address of the deployed FixedRateRedeemer contract.
+  contractAddress: "0x0000000000000000000000000000000000000000",
+
+  // Optional: expected chain id. Set to null to skip the network check.
+  chainId: null,
+
+  // Optional: read-only RPC endpoint (not required when using a browser wallet).
+  rpcUrl: null
+};

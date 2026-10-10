@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>FixedRateRedeemer &mdash; redeem token A for token B</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <main class="card">
+    <header>
+      <h1>FixedRateRedeemer</h1>
+      <p class="subtitle">
+        Redeem <strong>token&nbsp;A</strong> for <strong>token&nbsp;B</strong> at a fixed,
+        immutable rate. One direction only. The contract never holds your tokens.
+      </p>
+    </header>
+
+    <section class="row">
+      <button id="connect" class="primary">Connect wallet</button>
+      <span id="account" class="mono muted">&mdash;</span>
+    </section>
+
+    <section class="grid" id="info">
+      <div class="field"><span class="label">Token A (you give)</span><span id="tokenA" class="mono">&mdash;</span></div>
+      <div class="field"><span class="label">Token B (you receive)</span><span id="tokenB" class="mono">&mdash;</span></div>
+      <div class="field"><span class="label">Vault wallet</span><span id="wallet" class="mono">&mdash;</span></div>
+      <div class="field"><span class="label">Rate</span><span id="rate" class="mono">&mdash;</span></div>
+      <div class="field"><span class="label">Your token A balance</span><span id="balA" class="mono">&mdash;</span></div>
+      <div class="field"><span class="label">Vault token B balance</span><span id="balB" class="mono">&mdash;</span></div>
+      <div class="field"><span class="label">Your token A allowance</span><span id="allowA" class="mono">&mdash;</span></div>
+    </section>
+
+    <section class="redeem">
+      <label for="amountA">Amount of token A to redeem</label>
+      <div class="inputRow">
+        <input id="amountA" type="text" inputmode="decimal" placeholder="0.0" autocomplete="off" />
+        <button id="max" class="ghost">Max</button>
+      </div>
+      <p class="preview">You will receive: <span id="preview" class="mono">&mdash;</span> token B</p>
+
+      <div class="actions">
+        <button id="approve" class="secondary">1. Approve token A</button>
+        <button id="redeem" class="primary" disabled>2. Redeem</button>
+      </div>
+      <p id="status" class="status" role="status"></p>
+    </section>
+
+    <footer class="muted">
+      Configure the deployed address in <code>config.js</code>.
+      The vault wallet must have approved this contract for token B.
+    </footer>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/ethers@6.13.4/dist/ethers.umd.min.js" crossorigin="anonymous"></script>
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
