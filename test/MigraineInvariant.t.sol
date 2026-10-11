@@ -36,7 +36,16 @@ contract MigraineHandler is Test {
     }
 
     function redeem(uint256 actorSeed, uint256 amountA) external {
+        _perform(actors[bound(actorSeed, 0, actors.length - 1)], amountA, address(0), false);
+    }
+
+    function redeemTo(uint256 actorSeed, uint256 amountA, uint256 recipientSeed) external {
         address actor = actors[bound(actorSeed, 0, actors.length - 1)];
+        address recipient = actors[bound(recipientSeed, 0, actors.length - 1)];
+        _perform(actor, amountA, recipient, true);
+    }
+
+    function _perform(address actor, uint256 amountA, address recipient, bool useRedeemTo) internal {
         amountA = bound(amountA, 1, 1_000e18);
 
         uint256 balA = tokenA.balanceOf(actor);
@@ -59,11 +68,19 @@ contract MigraineHandler is Test {
         vm.prank(vault);
         tokenB.approve(address(redeemer), type(uint256).max);
 
-        vm.prank(actor);
-        try redeemer.redeem(amountA) returns (uint256 amountB) {
-            ghostTotalAIn += amountA;
-            ghostTotalBOut += amountB;
-        } catch {}
+        if (useRedeemTo) {
+            vm.prank(actor);
+            try redeemer.redeemTo(amountA, recipient) returns (uint256 amountB) {
+                ghostTotalAIn += amountA;
+                ghostTotalBOut += amountB;
+            } catch {}
+        } else {
+            vm.prank(actor);
+            try redeemer.redeem(amountA) returns (uint256 amountB) {
+                ghostTotalAIn += amountA;
+                ghostTotalBOut += amountB;
+            } catch {}
+        }
     }
 }
 
@@ -87,8 +104,9 @@ contract MigraineInvariantTest is Test {
         handler = new MigraineHandler(redeemer, tokenA, tokenB, vault, RATE_NUM, RATE_DEN);
 
         targetContract(address(handler));
-        bytes4[] memory selectors = new bytes4[](1);
+        bytes4[] memory selectors = new bytes4[](2);
         selectors[0] = MigraineHandler.redeem.selector;
+        selectors[1] = MigraineHandler.redeemTo.selector;
         targetSelector(FuzzSelector({addr: address(handler), selectors: selectors}));
     }
 

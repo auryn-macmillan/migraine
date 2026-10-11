@@ -34,8 +34,12 @@ window.MIGRAINE_CONFIG = {
    redeemer.
 4. **Approve token A** — only enabled when your allowance is below the amount
    you typed.
-5. **Redeem** — calls `redeem(amountA)`, waits for the receipt and reads the
-   `Redeemed` event to report the exact `tokenB` received.
+5. **Redeem** — calls `redeem(amountA)` (or `redeemTo(amountA, to)` when you fill
+   in the optional recipient), waits for the receipt and reads the `Redeemed`
+   event to report the exact `tokenB` received. Leave the recipient blank to
+   receive token B yourself.
+6. A `tokenB` preview of `0` means the amount is too small for `redeem` (it would
+   revert with `ZeroOutput`); the UI shows this and keeps Redeem disabled.
 
 The UI never asks for token `B` approvals: the *vault wallet* is responsible
 for approving the redeemer to spend `tokenB` (a Safe transaction). See the

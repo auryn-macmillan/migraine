@@ -42,9 +42,9 @@ statement of P6 (immutability).
 
 ## Correspondence to the Solidity contract and the trust boundary
 
-The deployed Solidity contract is **stateless**: it performs two external
-`transferFrom` calls (token A from caller to vault, token B from vault to
-caller). Verity classifies external-call mechanics (`call`/`staticcall`,
+The deployed Solidity contract is **stateless**: `redeem`/`redeemTo` perform two
+external `transferFrom` calls (token A from caller to vault, token B from vault
+to the recipient). Verity classifies external-call mechanics (`call`/`staticcall`,
 returndata plumbing, ECMs) and bytecode immutables as an explicit **trust
 boundary** rather than a fully proof-modelled fragment (see the Verity
 *Capabilities & Limits* and *Trust Model* pages). To keep the verified surface
@@ -55,13 +55,18 @@ meaningful we therefore model the redeemer's *accounting core*:
 | Vault's `tokenB` allowance to the redeemer | `remainingInventoryB` (slot 0) |
 | Vault's accumulated `tokenA` balance | `totalRedeemedA` (slot 1) |
 | Immutable `rateNumerator` / `rateDenominator` | constants |
+| `redeem` / `redeemTo` (recipient selection) | out of scope (same accounting) |
 | Two `safeTransferFrom` calls | out of scope (trust boundary) |
-| `ReentrancyGuard` | out of scope (trust boundary) |
+
+`redeemTo` shares the identical accounting as `redeem` and only changes the
+`tokenB` recipient, so it needs no separate model. Because the contract holds no
+mutable state, no reentrancy guard is used (or modelled); a reentrant token can
+only produce additional independent redemptions.
 
 The theorem therefore establishes the fixed-rate arithmetic and the
 conservation/accounting semantics — properties P1 (rate correctness), P5
 (conservation) and P6 (immutability) from `SPEC.md`. Properties P3 (atomicity),
-P4 (no custody) and P7 (reentrancy safety) are guaranteed by the Solidity
+P4 (no custody) and P7 (reentrancy-harmless) are guaranteed by the Solidity
 construction and exercised by the Foundry test suite; P2 (one-way) follows from
 the absence of any reverse entrypoint.
 

@@ -33,10 +33,11 @@ This repository contains four deliverables:
 1. The user approves `Migraine` to spend `tokenA`.
 2. The vault wallet approves `Migraine` to spend `tokenB` (its
    allowance is the hard on-chain cap).
-3. The user calls `redeem(amountA)`:
+3. The user calls `redeem(amountA)` (or `redeemTo(amountA, to)` to send `tokenB`
+   to someone else):
    - `amountB = floor(amountA * rateNumerator / rateDenominator)`
    - `tokenA.transferFrom(user, vault, amountA)`
-   - `tokenB.transferFrom(vault, user, amountB)`
+   - `tokenB.transferFrom(vault, recipient, amountB)`
    Both transfers commit atomically.
 
 `tokenA`, `tokenB`, `wallet`, `rateNumerator` and `rateDenominator` are
@@ -52,7 +53,7 @@ test/
   Migraine.t.sol          unit + fuzz tests
   MigraineIntegration.t.sol   end-to-end lifecycle with a contract vault
   MigraineInvariant.t.sol     stateful invariant tests
-  mocks/                           MockERC20, MockSafeWallet, ReentrantERC20
+  mocks/                           MockERC20, MockSafeWallet, ReentrantOnceERC20
   utils/TestBase.sol               shared fixture
 web/                               static frontend (ethers v6)
 verity/                            Verity formal specification + proofs
@@ -73,11 +74,14 @@ forge lint
 
 The test suite covers:
 
-- constructor validation and immutables,
+- constructor validation (including wallet-is-a-token) and immutables,
 - `previewRedeem` math (including 18→6 decimal mismatch and floor rounding),
-- the happy path, exact allowance consumption, multiple users,
-- zero-amount / zero-output / missing-approval / insufficient-balance reverts,
-- reentrancy protection against a hostile ERC-20,
+- `redeem` and `redeemTo` happy paths, explicit recipients, exact allowance
+  consumption, multiple users,
+- zero-amount / zero-output / invalid-recipient / missing-approval /
+  insufficient-balance reverts,
+- harmless reentrancy: a reentrant ERC-20 cannot extract value or break the
+  no-custody property (the contract is stateless and has no guard),
 - stateful invariants: no custody, inventory conservation, rate never favours
   the redeemer.
 
@@ -155,7 +159,44 @@ pull request:
 - **No admin surface.** Immutable parameters and no owner means there is nothing
   to pause, upgrade, or compromise.
 - **Rounding favours the vault.** Payouts round down; dust accrues to the vault.
-- Reentrancy is blocked by OpenZeppelin's `ReentrancyGuard`.
+- **Stateless / reentrancy-harmless.** The contract holds no mutable state, so no
+  reentrancy guard is used: a reentrant token can only trigger additional,
+  independent redemptions (bounded by the same allowances/balances) and cannot
+  corrupt state or extract value. `Redeemed` is emitted before the external calls
+  (checks-effects-interactions), so it is never a false success signal; with a
+  reentrant token, log ordering can nest, so off-chain consumers should not assume
+  strictly sequential events.
+
+## Token due diligence (before choosing the pair)
+
+Because `tokenA` and `tokenB` are fixed at deployment and the contract assumes
+standard, exact-transfer ERC-20s, verify both tokens up front:
+
+- **No transfer fees / rebasing / hook-based amounts.** Fee-on-transfer or
+  rebasing tokens break the exact-amount accounting (the vault would absorb the
+  shortfall on `tokenA`, or users would receive less `tokenB`).
+- **Upgradeability.** Prefer non-upgradeable tokens; a proxy admin can change
+  transfer behaviour after deployment.
+- **Blocklists / pausability / mint authority.** A token that can freeze the
+  vault wallet, pause transfers, or mint unlimited supply changes the risk
+  profile materially.
+- **ERC-777 / receive hooks.** Confirm the vault wallet can receive `tokenA`; an
+  ERC-777 `tokenA` requires the Safe to implement `tokensReceived`.
+- **Decimals.** Confirm `tokenA`/`tokenB` decimals and set `rateNumerator` /
+  `rateDenominator` for the **smallest units** (both tokens are used in raw base
+  units; a decimal mismatch must be absorbed into the rate).
+
+## Pre-deployment checklist
+
+1. Deploy with the intended `tokenA`, `tokenB`, vault `wallet`, and rate.
+2. Fund the vault wallet with `tokenB` to cover the entire redeemable `tokenA`
+   supply, and have the vault approve `Migraine` for that amount.
+3. Run the invariant/property suite against a **fork of the real token pair** to
+   catch decimal or token-quirk surprises.
+4. Do a **canary redemption** with a small `tokenA` amount and a small vault
+   allowance first; confirm `tokenA` lands in the vault and `tokenB` reaches the
+   recipient.
+5. Only then raise the vault allowance to the full inventory.
 
 ## License
 

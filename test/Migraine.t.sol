@@ -2,12 +2,11 @@
 pragma solidity 0.8.24;
 
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 
 import {Migraine} from "../src/Migraine.sol";
 import {MockERC20} from "./mocks/MockERC20.sol";
-import {ReentrantERC20} from "./mocks/ReentrantERC20.sol";
+import {ReentrantOnceERC20} from "./mocks/ReentrantOnceERC20.sol";
 import {TestBase} from "./utils/TestBase.sol";
 
 contract MigraineTest is TestBase {
@@ -58,6 +57,16 @@ contract MigraineTest is TestBase {
         address predicted = vm.computeCreateAddress(address(this), vm.getNonce(address(this)));
         vm.expectRevert(Migraine.WalletIsSelf.selector);
         new Migraine(IERC20(address(tokenA)), IERC20(address(tokenB)), predicted, 1, 1);
+    }
+
+    function test_Constructor_RevertsOnWalletIsTokenA() public {
+        vm.expectRevert(Migraine.InvalidWallet.selector);
+        new Migraine(IERC20(address(tokenA)), IERC20(address(tokenB)), address(tokenA), 1, 1);
+    }
+
+    function test_Constructor_RevertsOnWalletIsTokenB() public {
+        vm.expectRevert(Migraine.InvalidWallet.selector);
+        new Migraine(IERC20(address(tokenA)), IERC20(address(tokenB)), address(tokenB), 1, 1);
     }
 
     // ---------------------------------------------------------------------
@@ -149,6 +158,72 @@ contract MigraineTest is TestBase {
     }
 
     // ---------------------------------------------------------------------
+    // redeemTo
+    // ---------------------------------------------------------------------
+
+    function test_RedeemTo_SendsTokenBToRecipient() public {
+        uint256 amountA = 100e18;
+        uint256 amountB = amountA * RATE_NUM / RATE_DEN;
+
+        _fundVault(1_000e18);
+        _fundUser(alice, amountA);
+
+        // tokenA comes from the caller (alice), tokenB goes to bob.
+        vm.expectEmit(true, true, true, true, address(redeemer));
+        emit Redeemed(alice, bob, amountA, amountB);
+
+        vm.prank(alice);
+        uint256 got = redeemer.redeemTo(amountA, bob);
+
+        assertEq(got, amountB);
+        assertEq(tokenA.balanceOf(alice), 0);
+        assertEq(tokenA.balanceOf(vault), amountA);
+        assertEq(tokenB.balanceOf(alice), 0);
+        assertEq(tokenB.balanceOf(bob), amountB);
+        assertEq(tokenA.balanceOf(address(redeemer)), 0);
+        assertEq(tokenB.balanceOf(address(redeemer)), 0);
+    }
+
+    function test_RedeemTo_SelfMatchesRedeem() public {
+        uint256 amountA = 40e18;
+        uint256 amountB = amountA * RATE_NUM / RATE_DEN;
+
+        _fundVault(1_000e18);
+        _fundUser(alice, amountA);
+
+        vm.expectEmit(true, true, true, true, address(redeemer));
+        emit Redeemed(alice, alice, amountA, amountB);
+
+        vm.prank(alice);
+        uint256 got = redeemer.redeemTo(amountA, alice);
+
+        assertEq(got, amountB);
+        assertEq(tokenB.balanceOf(alice), amountB);
+    }
+
+    function test_RedeemTo_RevertsOnZeroAmount() public {
+        vm.prank(alice);
+        vm.expectRevert(Migraine.ZeroAmount.selector);
+        redeemer.redeemTo(0, alice);
+    }
+
+    function test_RedeemTo_RevertsOnZeroOutput() public {
+        // Rate 1/2 makes a 1-unit redemption round down to zero tokenB.
+        Migraine r = new Migraine(IERC20(address(tokenA)), IERC20(address(tokenB)), vault, 1, 2);
+        vm.prank(alice);
+        vm.expectRevert(Migraine.ZeroOutput.selector);
+        r.redeemTo(1, alice); // 1 * 1 / 2 = 0
+    }
+
+    function test_RedeemTo_RevertsOnInvalidRecipient() public {
+        address[5] memory bad = [address(0), address(redeemer), address(tokenA), address(tokenB), vault];
+        for (uint256 i; i < bad.length; ++i) {
+            vm.expectRevert(abi.encodeWithSelector(Migraine.InvalidRecipient.selector, bad[i]));
+            redeemer.redeemTo(10e18, bad[i]);
+        }
+    }
+
+    // ---------------------------------------------------------------------
     // redeem: reverts
     // ---------------------------------------------------------------------
 
@@ -209,17 +284,25 @@ contract MigraineTest is TestBase {
     }
 
     // ---------------------------------------------------------------------
-    // Reentrancy
+    // Reentrancy is harmless (the contract is stateless and has no guard)
     // ---------------------------------------------------------------------
 
-    function test_Redeem_ReentrancyBlocked() public {
-        ReentrantERC20 malicious = new ReentrantERC20();
+    function test_Reentrancy_HarmsNothing() public {
+        ReentrantOnceERC20 malicious = new ReentrantOnceERC20();
         MockERC20 honest = new MockERC20("Honest", "HON", 18);
-
         Migraine r = new Migraine(IERC20(address(malicious)), IERC20(address(honest)), vault, RATE_NUM, RATE_DEN);
 
-        malicious.configure(address(r), 1);
-        malicious.mint(alice, 100e18);
+        address sink = makeAddr("reentrantSink");
+        uint256 nestedA = 10e18;
+        uint256 outerA = 100e18;
+        malicious.configure(address(r), nestedA, sink);
+
+        // The malicious token redeems on its own behalf, once, during the outer transfer.
+        malicious.mint(address(malicious), nestedA);
+        vm.prank(address(malicious));
+        malicious.approve(address(r), type(uint256).max);
+
+        malicious.mint(alice, outerA);
         vm.prank(alice);
         malicious.approve(address(r), type(uint256).max);
 
@@ -227,9 +310,22 @@ contract MigraineTest is TestBase {
         vm.prank(vault);
         honest.approve(address(r), type(uint256).max);
 
+        uint256 nestedB = nestedA * RATE_NUM / RATE_DEN;
+        uint256 outerB = outerA * RATE_NUM / RATE_DEN;
+
         vm.prank(alice);
-        vm.expectRevert(ReentrancyGuard.ReentrancyGuardReentrantCall.selector);
-        r.redeem(100e18);
+        uint256 got = r.redeem(outerA);
+        assertEq(got, outerB);
+
+        // Both redemptions settled correctly, and nothing was extracted for free.
+        assertEq(malicious.balanceOf(vault), outerA + nestedA);
+        assertEq(honest.balanceOf(alice), outerB);
+        assertEq(honest.balanceOf(sink), nestedB);
+        assertEq(honest.balanceOf(vault), 1_000e18 - outerB - nestedB);
+        assertEq(malicious.balanceOf(address(malicious)), 0);
+        // No custody.
+        assertEq(malicious.balanceOf(address(r)), 0);
+        assertEq(honest.balanceOf(address(r)), 0);
     }
 
     // ---------------------------------------------------------------------
@@ -255,6 +351,28 @@ contract MigraineTest is TestBase {
         assertEq(tokenB.balanceOf(vault), vaultBBefore - amountB);
         assertEq(tokenA.balanceOf(alice), 0);
         assertEq(tokenB.balanceOf(alice), amountB);
+        assertEq(tokenA.balanceOf(address(redeemer)), 0);
+        assertEq(tokenB.balanceOf(address(redeemer)), 0);
+    }
+
+    function testFuzz_RedeemTo_Accounting(uint256 amountA, address recipient) public {
+        amountA = bound(amountA, 1, 1e30);
+        uint256 amountB = Math.mulDiv(amountA, RATE_NUM, RATE_DEN);
+        vm.assume(amountB > 0);
+        vm.assume(
+            recipient != address(0) && recipient != address(redeemer) && recipient != address(tokenA)
+                && recipient != address(tokenB) && recipient != vault
+        );
+
+        _fundVault(amountB);
+        _fundUser(alice, amountA);
+
+        vm.prank(alice);
+        uint256 got = redeemer.redeemTo(amountA, recipient);
+
+        assertEq(got, amountB);
+        assertEq(tokenA.balanceOf(vault), amountA);
+        assertEq(tokenB.balanceOf(recipient), amountB);
         assertEq(tokenA.balanceOf(address(redeemer)), 0);
         assertEq(tokenB.balanceOf(address(redeemer)), 0);
     }

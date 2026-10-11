@@ -13,6 +13,7 @@
     "function rateDenominator() view returns (uint256)",
     "function previewRedeem(uint256 amountA) view returns (uint256 amountB)",
     "function redeem(uint256 amountA) returns (uint256 amountB)",
+    "function redeemTo(uint256 amountA, address to) returns (uint256 amountB)",
     "event Redeemed(address indexed redeemer, address indexed recipient, uint256 amountA, uint256 amountB)"
   ];
 
@@ -37,6 +38,7 @@
     allowA: document.getElementById("allowA"),
     amountA: document.getElementById("amountA"),
     max: document.getElementById("max"),
+    recipient: document.getElementById("recipient"),
     preview: document.getElementById("preview"),
     approve: document.getElementById("approve"),
     redeem: document.getElementById("redeem"),
@@ -209,6 +211,7 @@
 
   async function updatePreview() {
     const amount = parsedAmount();
+    state.meta.previewB = null;
     if (!amount || !state.redeemer) {
       els.preview.textContent = "\u2014";
       updateButtons();
@@ -216,11 +219,19 @@
     }
     try {
       const out = await state.redeemer.previewRedeem(amount);
-      els.preview.textContent = fmt(out, state.decB);
+      state.meta.previewB = out;
+      els.preview.textContent = out === 0n ? "too small \u2014 redeem would revert" : fmt(out, state.decB);
     } catch (_) {
       els.preview.textContent = "\u2014";
     }
     updateButtons();
+  }
+
+  function validRecipient() {
+    const raw = (els.recipient.value || "").trim();
+    if (raw === "" || raw.toLowerCase() === (state.account || "").toLowerCase()) return { ok: true, to: null };
+    if (!ethers.isAddress(raw)) return { ok: false, to: null };
+    return { ok: true, to: raw };
   }
 
   function updateButtons() {
@@ -228,8 +239,10 @@
     const connected = !!state.signer && !!state.account;
     const allowance = state.meta.allowanceA ?? 0n;
     const needsApproval = amount != null && allowance < amount;
-    els.approve.disabled = !connected || amount == null || !needsApproval;
-    els.redeem.disabled = !connected || amount == null || needsApproval;
+    const previewZero = amount != null && state.meta.previewB === 0n;
+    const recipientOk = validRecipient().ok;
+    els.approve.disabled = !connected || amount == null || !needsApproval || previewZero || !recipientOk;
+    els.redeem.disabled = !connected || amount == null || needsApproval || previewZero || !recipientOk;
   }
 
   async function approve() {
@@ -251,11 +264,21 @@
   async function redeem() {
     const amount = parsedAmount();
     if (!amount) return;
+    if (state.meta.previewB === 0n) {
+      setStatus("Amount too small: redeem would revert (payout rounds to zero).", "error");
+      return;
+    }
+    const recipient = validRecipient();
+    if (!recipient.ok) {
+      setStatus("Invalid recipient address.", "error");
+      return;
+    }
     try {
       els.redeem.disabled = true;
       els.approve.disabled = true;
       setStatus("Redeeming\u2026");
-      const tx = await state.redeemer.redeem(amount);
+      const tx =
+        recipient.to != null ? await state.redeemer.redeemTo(amount, recipient.to) : await state.redeemer.redeem(amount);
       const receipt = await tx.wait();
       let out = "?";
       for (const log of receipt.logs) {
@@ -268,9 +291,11 @@
           /* ignore unrelated logs */
         }
       }
-      setStatus("Redeemed for " + out + " " + state.symB + ".", "ok");
+      const who = recipient.to != null ? " to " + short(recipient.to) : "";
+      setStatus("Redeemed for " + out + " " + state.symB + who + ".", "ok");
       els.amountA.value = "";
       els.preview.textContent = "\u2014";
+      state.meta.previewB = null;
       await refreshBalances();
     } catch (err) {
       setStatus(err.shortMessage || err.message || String(err), "error");
@@ -290,6 +315,7 @@
   els.redeem.addEventListener("click", redeem);
   els.max.addEventListener("click", useMax);
   els.amountA.addEventListener("input", updatePreview);
+  els.recipient.addEventListener("input", updateButtons);
 
   if (window.ethereum && window.ethereum.on) {
     window.ethereum.on("accountsChanged", () => window.location.reload());

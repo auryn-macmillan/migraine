@@ -39,37 +39,50 @@ decimals, use `rateNumerator = 25`, `rateDenominator = 10`.
 
 ## 4. Functional requirements
 
-### FR-1 — Redeem
+### FR-1 — Redeem (to self)
 `redeem(uint256 amountA) external returns (uint256 amountB)`
 
-When a user calls `redeem(amountA)`:
+Equivalent to `redeemTo(amountA, msg.sender)`: redeems `amountA` of `tokenA` and
+sends the resulting `tokenB` to the caller.
+
+### FR-2 — Redeem to a recipient
+`redeemTo(uint256 amountA, address to) public returns (uint256 amountB)`
+
+When called:
 
 1. Revert if `amountA == 0`.
 2. Compute `amountB = floor(amountA * rateNumerator / rateDenominator)`.
 3. Revert if `amountB == 0` (dust that would produce nothing).
-4. Transfer exactly `amountA` of `tokenA` **from the user to the vault wallet**.
-5. Transfer exactly `amountB` of `tokenB` **from the vault wallet to the user**.
-6. Emit `Redeemed(user, user, amountA, amountB)`.
+4. Revert if `to` is `address(0)`, this contract, `tokenA`, `tokenB`, or `wallet`.
+5. Emit `Redeemed(msg.sender, to, amountA, amountB)`.
+6. Transfer exactly `amountA` of `tokenA` **from the caller to the vault wallet**.
+7. Transfer exactly `amountB` of `tokenB` **from the vault wallet to `to`**.
 
 The two transfers are atomic: either both succeed or the whole transaction
-reverts, so a user can never give `tokenA` without receiving `tokenB`.
+reverts, so a caller can never give `tokenA` without the recipient receiving
+`tokenB`. `tokenA` is always pulled from `msg.sender`; only the `tokenB`
+recipient is configurable.
 
-### FR-2 — Preview
+### FR-3 — Preview
 `previewRedeem(uint256 amountA) view returns (uint256 amountB)`
 
-Return exactly the `amountB` that `redeem(amountA)` would pay, using the same
-full-precision, floor-rounded formula. This is a pure read used by the UI.
+Return exactly the `amountB` that `redeem`/`redeemTo` would pay, using the same
+full-precision, floor-rounded formula. This is a pure read used by the UI. It
+returns `0` for inputs that `redeem`/`redeemTo` reject (`amountA == 0`, or a
+payout that rounds to zero) and does not revert.
 
-### FR-3 — One-way only
+### FR-4 — One-way only
 There is **no** function anywhere in the contract that exchanges `tokenB` back
 for `tokenA`, and no way to change the direction, the rate, the tokens, or the
-wallet after deployment. The ABI contains a single state-changing method:
-`redeem`.
+wallet after deployment. The only state-changing methods are `redeem` and
+`redeemTo`.
 
-### FR-4 — No custody
+### FR-5 — No custody
 At the end of every successful call, and at every instant in between, the
-`Migraine` contract's balance of `tokenA` and of `tokenB` is zero. It
-only ever moves tokens directly between the user and the vault wallet.
+`Migraine` contract's balance of `tokenA` and of `tokenB` is zero. It only ever
+moves tokens directly between the caller/vault wallet (for `tokenA`) and the
+vault wallet/recipient (for `tokenB`). `to == address(this)` is rejected, so
+`tokenB` can never be stranded in the contract.
 
 ## 5. Preconditions and revert conditions
 
@@ -77,10 +90,18 @@ only ever moves tokens directly between the user and the vault wallet.
 | --- | --- |
 | `amountA == 0` | Revert `ZeroAmount()` |
 | `amountB == 0` after rounding | Revert `ZeroOutput()` |
-| User has not approved `tokenA` (or insufficient allowance/balance) | Revert (via `SafeERC20`, propagated) |
+| `to` is zero, this contract, a token, or the wallet | Revert `InvalidRecipient(to)` |
+| Caller has not approved `tokenA` (or insufficient allowance/balance) | Revert (via `SafeERC20`, propagated) |
 | Vault wallet has not approved `tokenB` (or insufficient allowance) | Revert (via `SafeERC20`, propagated) |
 | Vault wallet holds less `tokenB` than `amountB` | Revert (via `SafeERC20`, propagated) |
-| Reentrant call while a `redeem` is in flight | Revert `ReentrancyGuardReentrantCall()` |
+
+Reentrancy: the contract holds no mutable state, so a reentrant token can only
+trigger additional, independent redemptions — each bounded by the same
+allowances and balances — and cannot corrupt state or extract value. There is
+deliberately **no** reentrancy guard. The event is emitted before the external
+calls (checks-effects-interactions); an event is never a false success signal
+because a revert discards it.
+
 
 ## 6. Constructor validation
 
@@ -90,6 +111,7 @@ Deployment reverts if any of the following hold:
 - `tokenA == tokenB` → `IdenticalTokens()`
 - `wallet == address(0)` → `ZeroWallet()`
 - `wallet == address(this)` → `WalletIsSelf()` (would break the no-custody rule)
+- `wallet == tokenA` or `wallet == tokenB` → `InvalidWallet()`
 - `rateNumerator == 0` or `rateDenominator == 0` → `InvalidRate()`
 
 ## 7. Safety properties (desired invariants)
@@ -97,22 +119,25 @@ Deployment reverts if any of the following hold:
 These are the properties the formal specification (Verity/Lean) and the tests
 target.
 
-- **P1 (Rate correctness).** For every successful `redeem(amountA)`, the caller
-  receives exactly `floor(amountA * rateNumerator / rateDenominator)` of `tokenB`.
+- **P1 (Rate correctness).** For every successful `redeem`/`redeemTo(amountA, …)`,
+  the recipient receives exactly `floor(amountA * rateNumerator / rateDenominator)`
+  of `tokenB`.
 - **P2 (Direction / no reverse).** No reachable code path lets any caller obtain
   `tokenA` from the vault wallet, nor exchange `tokenB` for `tokenA`.
-- **P3 (Atomicity / no free lunch).** A caller cannot receive `tokenB` without
-  paying `amountA` of `tokenA`; the two transfers commit together or not at all.
+- **P3 (Atomicity / no free lunch).** A recipient cannot receive `tokenB` unless
+  `msg.sender` pays `amountA` of `tokenA`; the two transfers commit together or
+  not at all.
 - **P4 (No custody).** `tokenA.balanceOf(redeemer) == 0` and
-  `tokenB.balanceOf(redeemer) == 0` after every call.
+  `tokenB.balanceOf(redeemer) == 0` after every call, for every valid `to`.
 - **P5 (Conservation).** Summed across all successful redemptions, the `tokenA`
-  credited to the vault wallet equals the `amountA` values supplied by users,
+  credited to the vault wallet equals the `amountA` values supplied by callers,
   and the `tokenB` debited from the vault wallet equals the corresponding
   `amountB` values.
 - **P6 (Immutability).** After construction, `tokenA`, `tokenB`, `wallet`,
   `rateNumerator`, `rateDenominator` cannot change.
-- **P7 (Reentrancy-safe).** A malicious token cannot cause a nested `redeem` to
-  execute.
+- **P7 (Reentrancy-harmless).** The contract is stateless, so a reentrant token
+  cannot corrupt state or extract value; any nested redemption is independent and
+  bounded by the same allowances/balances. No guard is used.
 
 ## 8. Explicit non-goals / assumptions
 
@@ -136,6 +161,7 @@ constructor(address tokenA, address tokenB, address wallet,
             uint256 rateNumerator, uint256 rateDenominator)
 
 function redeem(uint256 amountA) external returns (uint256 amountB)
+function redeemTo(uint256 amountA, address to) public returns (uint256 amountB)
 function previewRedeem(uint256 amountA) external view returns (uint256 amountB)
 
 // immutable public getters
