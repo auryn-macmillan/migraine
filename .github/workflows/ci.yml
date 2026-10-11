@@ -67,14 +67,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          cd badge
-          git init -q
-          git checkout -q -b badges
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add coverage.json
-          git commit -qm "Update coverage badge [skip ci]"
-          git push -f "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" badges
+          bash scripts/publish-badge.sh badges coverage.json "$(cat badge/coverage.json)"
 
   # ---------------------------------------------------------------------------
   # Verity (Lean 4): overlay the model into a pinned Verity checkout and
@@ -84,6 +77,8 @@ jobs:
     name: Verity (Lean proofs + Yul)
     runs-on: ubuntu-latest
     timeout-minutes: 150
+    permissions:
+      contents: write # needed to publish the verification badge branch
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -144,3 +139,19 @@ jobs:
           name: Migraine-yul
           path: verity-upstream/artifacts/yul/Migraine.yul
           if-no-files-found: error
+
+      - name: Publish verification badge — passing (main only)
+        if: success() && github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          bash scripts/publish-badge.sh badges-verification verification.json \
+            '{"schemaVersion":1,"label":"formal verification","message":"passing","color":"brightgreen"}'
+
+      - name: Publish verification badge — failing (main only)
+        if: failure() && github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          bash scripts/publish-badge.sh badges-verification verification.json \
+            '{"schemaVersion":1,"label":"formal verification","message":"failing","color":"critical"}'

@@ -2,6 +2,7 @@
 
 [![CI](https://github.com/auryn-macmillan/migraine/actions/workflows/ci.yml/badge.svg)](https://github.com/auryn-macmillan/migraine/actions/workflows/ci.yml)
 [![coverage](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fauryn-macmillan%2Fmigraine%2Fbadges%2Fcoverage.json)](https://github.com/auryn-macmillan/migraine/actions/workflows/ci.yml)
+[![formal verification](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fauryn-macmillan%2Fmigraine%2Fbadges-verification%2Fverification.json)](https://github.com/auryn-macmillan/migraine/actions/workflows/ci.yml)
 
 > *Migraine* — because migrating from token A to token B is normally such a pain.
 
@@ -146,7 +147,13 @@ pull request:
   overlays the `Migraine` model via `scripts/ci-verity.sh`, builds the
   proofs (`lake build Contracts.Migraine.Proofs.Correctness`), fails on
   any `sorry`/`admit`, registers the compiler model and emits
-  `Migraine.yul` as a build artifact.
+  `Migraine.yul` as a build artifact. On `main` it publishes the
+  **formal verification** badge (a `badges-verification` branch, `passing` /
+  `failing`), so the proof status is visible without reading the workflow.
+
+Both badges are self-hosted (a shields.io "endpoint" backed by a JSON file on a
+dedicated branch, published by [`scripts/publish-badge.sh`](./scripts/publish-badge.sh))
+so they need no external account.
 
 ## Security notes and assumptions
 
