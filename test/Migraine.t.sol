@@ -8,6 +8,8 @@ import {Migraine} from "../src/Migraine.sol";
 import {MockERC20} from "./mocks/MockERC20.sol";
 import {MockSafeWallet} from "./mocks/MockSafeWallet.sol";
 import {ReentrantOnceERC20} from "./mocks/ReentrantOnceERC20.sol";
+import {MockFalseReturnERC20, MockNoReturnERC20} from "./mocks/MockNonStandardERC20.sol";
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {TestBase} from "./utils/TestBase.sol";
 
 contract MigraineTest is TestBase {
@@ -449,5 +451,86 @@ contract MigraineTest is TestBase {
         assertEq(tokenA.balanceOf(vault), amountA); // unchanged: self-transfer
         assertEq(tokenB.balanceOf(bob), amountB);
         assertEq(tokenB.balanceOf(vault), 0);
+    }
+
+    // ---------------------------------------------------------------------
+    // Non-standard ERC-20 return semantics (SafeERC20 boundary)
+    // ---------------------------------------------------------------------
+
+    function test_Redeem_RevertsWhenTokenAFalseReturn() public {
+        MockFalseReturnERC20 falsey = new MockFalseReturnERC20();
+        Migraine r = new Migraine(IERC20(address(falsey)), IERC20(address(tokenB)), vault, RATE_NUM, RATE_DEN);
+
+        falsey.mint(alice, 100e18);
+        vm.prank(alice);
+        falsey.approve(address(r), type(uint256).max);
+        tokenB.mint(vault, 1_000e18);
+        vm.prank(vault);
+        tokenB.approve(address(r), type(uint256).max);
+
+        vm.prank(alice);
+        vm.expectRevert(abi.encodeWithSelector(SafeERC20.SafeERC20FailedOperation.selector, address(falsey)));
+        r.redeem(100e18);
+
+        // Whole tx reverted: the lying token's internal transfer never persisted.
+        assertEq(falsey.balanceOf(alice), 100e18);
+        assertEq(falsey.balanceOf(vault), 0);
+    }
+
+    function test_Redeem_RevertsWhenTokenBFalseReturn_Atomically() public {
+        // Leg A (honest token) succeeds first; the false-return B leg reverts
+        // the whole transaction — stateless contract + revert = atomic rollback.
+        MockFalseReturnERC20 falseyB = new MockFalseReturnERC20();
+        Migraine r = new Migraine(IERC20(address(tokenA)), IERC20(address(falseyB)), vault, RATE_NUM, RATE_DEN);
+
+        tokenA.mint(alice, 100e18);
+        vm.prank(alice);
+        tokenA.approve(address(r), type(uint256).max);
+        falseyB.mint(vault, 150e18);
+        vm.prank(vault);
+        falseyB.approve(address(r), type(uint256).max);
+
+        vm.prank(alice);
+        vm.expectRevert(abi.encodeWithSelector(SafeERC20.SafeERC20FailedOperation.selector, address(falseyB)));
+        r.redeem(100e18);
+
+        assertEq(tokenA.balanceOf(alice), 100e18); // leg A rolled back
+        assertEq(tokenA.balanceOf(vault), 0);
+    }
+
+    function test_Redeem_SucceedsWithLegacyNoReturnTokens() public {
+        // USDT-style tokens with no return values: SafeERC20 accepts them.
+        MockNoReturnERC20 legacyA = new MockNoReturnERC20();
+        MockNoReturnERC20 legacyB = new MockNoReturnERC20();
+        Migraine r = new Migraine(IERC20(address(legacyA)), IERC20(address(legacyB)), vault, RATE_NUM, RATE_DEN);
+
+        legacyA.mint(alice, 100e18);
+        vm.prank(alice);
+        legacyA.approve(address(r), type(uint256).max);
+        legacyB.mint(vault, 1_000e18);
+        vm.prank(vault);
+        legacyB.approve(address(r), type(uint256).max);
+
+        vm.prank(alice);
+        uint256 got = r.redeem(100e18);
+
+        assertEq(got, 150e18);
+        assertEq(legacyA.balanceOf(alice), 0);
+        assertEq(legacyA.balanceOf(vault), 100e18);
+        assertEq(legacyB.balanceOf(alice), 150e18);
+        assertEq(legacyB.balanceOf(vault), 1_000e18 - 150e18);
+    }
+
+    function test_Redeem_MaxAllowanceNotConsumed() public {
+        // OZ ERC-20 skips allowance decrement at MAX_UINT256 — the exact
+        // modelled behaviour behind `redeemTo_success_run`'s non-MAX premise.
+        _fundUser(alice, 100e18); // approves type(uint256).max
+        _fundVault(1_000e18);
+
+        vm.prank(alice);
+        redeemer.redeem(100e18);
+
+        assertEq(tokenA.allowance(alice, address(redeemer)), type(uint256).max);
+        assertEq(tokenB.allowance(vault, address(redeemer)), type(uint256).max);
     }
 }
