@@ -45,6 +45,80 @@ contract MigraineHandler is Test {
         _perform(actor, amountA, recipient, true);
     }
 
+    /// @notice Failing-path driver: attempts a redemption *without* guaranteeing funding,
+    ///         approval, or a valid recipient, so the fuzzer exercises revert paths and
+    ///         checks that reverts leave the ghost accounting untouched.
+    /// @param mode 0 = zero amount, 1 = no tokenA approval, 2 = no tokenA balance,
+    ///             3 = vault short on tokenB, 4 = invalid recipient (the vault itself).
+    function redeemUnfunded(uint256 actorSeed, uint256 amountA, uint256 mode) external {
+        address actor = actors[bound(actorSeed, 0, actors.length - 1)];
+        amountA = bound(amountA, 1, 1_000e18);
+        mode = bound(mode, 0, 4);
+
+        // Pre-state the actor would need if the call were to succeed.
+        uint256 balA = tokenA.balanceOf(actor);
+        if (mode != 2 && balA < amountA) {
+            tokenA.mint(actor, amountA - balA);
+        }
+        if (mode != 1) {
+            vm.prank(actor);
+            tokenA.approve(address(redeemer), type(uint256).max);
+        }
+        uint256 needB = Math.mulDiv(amountA, rateNum, rateDen);
+        if (mode != 3) {
+            uint256 balB = tokenB.balanceOf(vault);
+            if (balB < needB) {
+                tokenB.mint(vault, needB - balB);
+                ghostInjectedB += needB - balB;
+            }
+            vm.prank(vault);
+            tokenB.approve(address(redeemer), type(uint256).max);
+        }
+
+        address recipient = mode == 4 ? vault : actor;
+        uint256 callAmount = mode == 0 ? 0 : amountA;
+
+        vm.prank(actor);
+        try redeemer.redeemTo(callAmount, recipient) returns (uint256 amountB) {
+            // A revert-free call must still obey the per-call rate and be booked.
+            assertEq(amountB, Math.mulDiv(callAmount, rateNum, rateDen), "per-call rate violated");
+            ghostTotalAIn += callAmount;
+            ghostTotalBOut += amountB;
+        } catch {}
+    }
+
+    /// @notice Success path with a contract recipient (the handler itself).
+    function redeemToContract(uint256 actorSeed, uint256 amountA) external {
+        address actor = actors[bound(actorSeed, 0, actors.length - 1)];
+        amountA = bound(amountA, 1, 1_000e18);
+
+        uint256 balA = tokenA.balanceOf(actor);
+        if (balA < amountA) {
+            tokenA.mint(actor, amountA - balA);
+        }
+        vm.prank(actor);
+        tokenA.approve(address(redeemer), type(uint256).max);
+
+        uint256 needB = Math.mulDiv(amountA, rateNum, rateDen);
+        if (needB == 0) {
+            return;
+        }
+        uint256 balB = tokenB.balanceOf(vault);
+        if (balB < needB) {
+            tokenB.mint(vault, needB - balB);
+            ghostInjectedB += needB - balB;
+        }
+        vm.prank(vault);
+        tokenB.approve(address(redeemer), type(uint256).max);
+
+        vm.prank(actor);
+        try redeemer.redeemTo(amountA, address(this)) returns (uint256 amountB) {
+            assertEq(amountB, needB, "per-call rate violated");
+            ghostTotalAIn += amountA;
+            ghostTotalBOut += amountB;
+        } catch {}
+    }
+
     function _perform(address actor, uint256 amountA, address recipient, bool useRedeemTo) internal {
         amountA = bound(amountA, 1, 1_000e18);
 
@@ -71,12 +145,14 @@ contract MigraineHandler is Test {
         if (useRedeemTo) {
             vm.prank(actor);
             try redeemer.redeemTo(amountA, recipient) returns (uint256 amountB) {
+                assertEq(amountB, needB, "per-call rate violated");
                 ghostTotalAIn += amountA;
                 ghostTotalBOut += amountB;
             } catch {}
         } else {
             vm.prank(actor);
             try redeemer.redeem(amountA) returns (uint256 amountB) {
+                assertEq(amountB, needB, "per-call rate violated");
                 ghostTotalAIn += amountA;
                 ghostTotalBOut += amountB;
             } catch {}
@@ -104,9 +180,11 @@ contract MigraineInvariantTest is Test {
         handler = new MigraineHandler(redeemer, tokenA, tokenB, vault, RATE_NUM, RATE_DEN);
 
         targetContract(address(handler));
-        bytes4[] memory selectors = new bytes4[](2);
+        bytes4[] memory selectors = new bytes4[](4);
         selectors[0] = MigraineHandler.redeem.selector;
         selectors[1] = MigraineHandler.redeemTo.selector;
+        selectors[2] = MigraineHandler.redeemUnfunded.selector;
+        selectors[3] = MigraineHandler.redeemToContract.selector;
         targetSelector(FuzzSelector({addr: address(handler), selectors: selectors}));
     }
 

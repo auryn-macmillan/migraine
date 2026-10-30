@@ -9,12 +9,19 @@ each implementation to a `Prop`-valued specification with a proof.
 
 ```
 Contracts/Migraine/
-  Migraine.lean     reference model (`verity_contract` block)
+  Migraine.lean              reference model (`verity_contract` block)
   Spec.lean                  formal specification (`redeem_spec`, `preview_spec`, ...)
   Invariants.lean            well-formedness invariant
+  System.lean                closed-system model: `redeemTo` with inlined
+                             ERC-20 ledgers (token A/B balances + allowances,
+                             slots 5-8) and deploy-once config (slots 0-4)
   Proofs/Basic.lean          `redeem_meets_spec`, `preview_meets_spec`, ...
   Proofs/Correctness.lean    guard/revert behaviour, well-formedness
-Contracts/Migraine.lean   module re-export
+  Proofs/System.lean         closed-system lemmas: deploy meets spec, preview,
+                             revert atomicity (revert discards all writes)
+  Proofs/RedeemTo.lean       closed-system success path + P1-P6 corollaries
+  Proofs/AxiomCheck.lean     `#print axioms` gate for the redeem-path theorems
+Contracts/Migraine.lean      module re-export
 ```
 
 ## What is proven
@@ -58,17 +65,58 @@ meaningful we therefore model the redeemer's *accounting core*:
 | `redeem` / `redeemTo` (recipient selection) | out of scope (same accounting) |
 | Two `safeTransferFrom` calls | out of scope (trust boundary) |
 
+The closed system (`System.lean`) lifts the last two rows: it models the
+ledgers themselves, so the redemption legs are proof-modelling transfers:
+
+| Solidity reality | Closed-system model |
+| --- | --- |
+| `tokenA` / `tokenB` / `vaultWallet` / rate | config slots 0-4, written once at deploy |
+| `tokenA.balanceOf` / `allowance` (of redeemer) | `balASlot` (5) / `allowASlot` (6) |
+| `tokenB.balanceOf` / `allowance` (of vault) | `balBSlot` (7) / `allowBSlot` (8) |
+| The two `safeTransferFrom` calls | inlined `transferFrom` legs over those ledgers |
+
 `redeemTo` shares the identical accounting as `redeem` and only changes the
-`tokenB` recipient, so it needs no separate model. Because the contract holds no
-mutable state, no reentrancy guard is used (or modelled); a reentrant token can
-only produce additional independent redemptions.
+`tokenB` recipient. Because the contract holds no mutable state, no reentrancy
+guard is used (or modelled); a reentrant token can only produce additional
+independent redemptions.
 
 The theorem therefore establishes the fixed-rate arithmetic and the
-conservation/accounting semantics — properties P1 (rate correctness), P5
-(conservation) and P6 (immutability) from `SPEC.md`. Properties P3 (atomicity),
-P4 (no custody) and P7 (reentrancy-harmless) are guaranteed by the Solidity
-construction and exercised by the Foundry test suite; P2 (one-way) follows from
-the absence of any reverse entrypoint.
+conservation/accounting semantics for the idealized model — P1 (rate
+correctness) and P6 (immutability as compile-time constants).
+
+## Closed-system proof of `redeemTo` (P1-P6 end to end)
+
+`System.lean` models the contract *with its environment's accounting*: the two
+ERC-20 legs are inlined as ledger transfers over slots 5-8 (`tokenA`
+balance/allowance, `tokenB` balance/allowance), and the config (token
+addresses, vault wallet, rate numerator/denominator) is deploy-once state in
+slots 0-4. `Proofs/RedeemTo.lean` then proves, for the real `redeemTo`
+statement sequence (guards, floor payout via `mulDiv512Down?`, five-way
+recipient blacklist, `Redeemed` event, two `transferFrom` legs):
+
+- `redeemTo_success_run` (P1 + P3 positive half) — under positive amounts,
+  sufficient non-MAX allowances and balances, and a recipient off the
+  blacklist, `redeemTo` succeeds paying exactly the floored quotient
+  `amountB`; token A moves sender -> vault, token B moves vault -> recipient,
+  both allowances are consumed, and the `Redeemed` event is appended.
+- Exact pointwise balance effects — recipient `+amountB` of token B, vault
+  `-amountB +amountA`, sender `-amountA` of token A, every other address
+  unchanged on both tokens.
+- `no_custody` (P4) — the recipient's token-A balance is untouched; the
+  redemption never pushes token A to anyone but the vault.
+- `preserves_balA_sum` / `preserves_balB_sum` (P5) — each token's total over
+  any address list is conserved up to the transfer endpoints
+  (`ListSum.map_sum_transfer_eq`).
+- `preserves_config` (P6) — redemption writes no config slot.
+- `redeemTo_revert_state_unchanged` (P3, `Proofs/System.lean`) — any revert
+  discards every write: rollback-by-construction in the model's
+  checks-before-effects ordering.
+
+P2 (one-way) and P7 (reentrancy-harmless) remain structural: the model has no
+reverse entrypoint, and the contract holds no mutable state a reentrant call
+could exploit. All of these are statements about the Verity model, not the
+deployed bytecode; the external-call mechanics of the real `safeTransferFrom`
+calls stay on Verity's trust boundary.
 
 ## Build it inside a Verity checkout
 
@@ -104,7 +152,8 @@ Then register the module (three one-line edits):
 Then verify the proofs and compile the artifact:
 
 ```bash
-lake build Contracts.Migraine.Proofs.Correctness
+lake build Contracts.Migraine                       # model + all proofs
+lake build Contracts.Migraine.Proofs.AxiomCheck     # prints axiom sets: expect only propext/Quot.sound
 lake exe verity-compiler --manifest migraine.manifest -o artifacts/yul
 grep -r "sorry" Contracts/Migraine/   # should be empty
 ```

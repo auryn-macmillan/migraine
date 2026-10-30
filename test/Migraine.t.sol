@@ -6,6 +6,7 @@ import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 
 import {Migraine} from "../src/Migraine.sol";
 import {MockERC20} from "./mocks/MockERC20.sol";
+import {MockSafeWallet} from "./mocks/MockSafeWallet.sol";
 import {ReentrantOnceERC20} from "./mocks/ReentrantOnceERC20.sol";
 import {TestBase} from "./utils/TestBase.sol";
 
@@ -375,5 +376,77 @@ contract MigraineTest is TestBase {
         assertEq(tokenB.balanceOf(recipient), amountB);
         assertEq(tokenA.balanceOf(address(redeemer)), 0);
         assertEq(tokenB.balanceOf(address(redeemer)), 0);
+    }
+
+    // ---------------------------------------------------------------------
+    // Math.mulDiv overflow (512-bit product, quotient must fit uint256)
+    // ---------------------------------------------------------------------
+
+    /// @dev Largest amountA whose payout floor(amountA * 3 / 2) still fits in uint256:
+    ///      floor((2^257 - 1) / 3); the payout is exactly type(uint256).max.
+    uint256 private constant MAX_SAFE_AMOUNT_A = 77194726158210796949047323339125271902179989777093709359638389338608753093290;
+
+    function test_PreviewRedeem_MaxSafeAmountPayoutIsMaxUint() public view {
+        assertEq(redeemer.previewRedeem(MAX_SAFE_AMOUNT_A), type(uint256).max);
+    }
+
+    function test_PreviewRedeem_RevertsOnMulDivOverflow() public {
+        // One wei past the boundary: floor((a+1) * 3 / 2) = 2^256 + 1 overflows uint256.
+        vm.expectRevert(abi.encodeWithSelector(bytes4(keccak256("Panic(uint256)")), uint256(0x11)));
+        redeemer.previewRedeem(MAX_SAFE_AMOUNT_A + 1);
+    }
+
+    function test_Redeem_RevertsOnMulDivOverflow() public {
+        // Overflow must revert before any transfer is attempted, not wrap to a small payout.
+        _fundUser(alice, type(uint256).max);
+        _fundVault(type(uint256).max);
+
+        vm.prank(alice);
+        vm.expectRevert(abi.encodeWithSelector(bytes4(keccak256("Panic(uint256)")), uint256(0x11)));
+        redeemer.redeem(type(uint256).max);
+
+        // Nothing moved.
+        assertEq(tokenA.balanceOf(vault), 0);
+        assertEq(tokenB.balanceOf(alice), 0);
+    }
+
+    // ---------------------------------------------------------------------
+    // Contract recipients and the vault-as-caller self-transfer path
+    // ---------------------------------------------------------------------
+
+    function test_RedeemTo_ContractRecipient() public {
+        uint256 amountA = 100e18;
+        uint256 amountB = amountA * RATE_NUM / RATE_DEN;
+        address walletRecipient = address(new MockSafeWallet(alice));
+
+        _fundVault(amountB);
+        _fundUser(alice, amountA);
+
+        vm.prank(alice);
+        uint256 got = redeemer.redeemTo(amountA, walletRecipient);
+
+        assertEq(got, amountB);
+        assertEq(tokenB.balanceOf(walletRecipient), amountB);
+        assertEq(tokenA.balanceOf(vault), amountA);
+    }
+
+    function test_RedeemTo_VaultAsCallerPaysRecipient() public {
+        // The vault redeeming its own tokenA: tokenA moves wallet -> wallet (self-transfer,
+        // a no-op in ERC-20) and tokenB pays out to the (non-vault) recipient.
+        uint256 amountA = 100e18;
+        uint256 amountB = amountA * RATE_NUM / RATE_DEN;
+
+        _fundVault(amountB);
+        tokenA.mint(vault, amountA);
+        vm.prank(vault);
+        tokenA.approve(address(redeemer), type(uint256).max);
+
+        vm.prank(vault);
+        uint256 got = redeemer.redeemTo(amountA, bob);
+
+        assertEq(got, amountB);
+        assertEq(tokenA.balanceOf(vault), amountA); // unchanged: self-transfer
+        assertEq(tokenB.balanceOf(bob), amountB);
+        assertEq(tokenB.balanceOf(vault), 0);
     }
 }
