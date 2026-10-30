@@ -1,62 +1,50 @@
 #!/usr/bin/env bash
 #
-# Overlay the Migraine Verity sources into a Verity checkout and
-# register the new contract with the build and the compiler.
+# Build and gate the Migraine Verity proofs.
 #
-# Usage: scripts/ci-verity.sh <path-to-verity-checkout>
+# `verity/` is a self-contained Lake package: it pins Verity as a git
+# dependency (see verity/lakefile.lean), so there is no fork, no
+# checkout overlay, and no in-tree registration. To upgrade Verity,
+# bump the pin and rebuild — CI must stay green before the bump lands.
+#
+# Usage: scripts/ci-verity.sh
 #
 # The script is idempotent: running it twice is safe.
 
 set -euo pipefail
 
-VERITY_DIR="${1:?usage: ci-verity.sh <path-to-verity-checkout>}"
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+PKG="$REPO_ROOT/verity"
 
-if [[ ! -f "$VERITY_DIR/lakefile.lean" ]]; then
-  echo "error: '$VERITY_DIR' does not look like a Verity checkout" >&2
+cd "$PKG"
+
+# 1. Resolve the pinned Verity (and its transitive pins).
+lake update
+
+# 2. Build the model, spec, invariants and the full proof tree.
+lake build Migraine.Proofs.Correctness
+lake build Migraine
+
+# 3. Axiom gate: every redeem-path theorem must rest only on Lean's
+#    standard axioms. Any sorryAx / native-decide leak fails the build.
+lake build Migraine.Proofs.AxiomCheck 2>&1 | tee axiomcheck.log
+if grep -E "depends on axioms" axiomcheck.log | grep -E "sorryAx|natLitAxiom|ofReduceBool|ofReduceNat"; then
+  echo "::error::Axiom leak: proofs depend on a non-standard axiom" >&2
   exit 1
 fi
+echo "Axiom gate clean."
 
-# 1. Copy the contract, spec, invariants, proofs and module re-export.
-rm -rf "$VERITY_DIR/Contracts/Migraine"
-cp -r "$REPO_ROOT/verity/Contracts/Migraine" "$VERITY_DIR/Contracts/"
-cp "$REPO_ROOT/verity/Contracts/Migraine.lean" "$VERITY_DIR/Contracts/"
+# Tactic-position sorry/admit only (prose mentions in comments are fine;
+# the axiom gate above catches any real sorry via sorryAx anyway).
+if grep -rnE '(^|[^A-Za-z0-9_.])(by[[:space:]]+|exact[[:space:]]+|·[[:space:]]+|;\s*|:\s*|sorryAx)(sorry|admit)([^A-Za-z0-9_]|$)' Migraine/; then
+  echo "::error::Found sorry/admit in the Migraine proofs" >&2
+  exit 1
+fi
+echo "No sorry/admit found."
 
-# 2. Register the module with the build + compiler (idempotent string edits).
-python3 - "$VERITY_DIR" <<'PY'
-import sys
-from pathlib import Path
-
-root = Path(sys.argv[1])
-
-def insert_after(path: Path, anchor: str, addition: str) -> None:
-    text = path.read_text()
-    if addition.strip() in text:
-        return
-    if anchor not in text:
-        raise SystemExit(f"anchor not found in {path}: {anchor!r}")
-    text = text.replace(anchor, anchor + "\n" + addition, 1)
-    path.write_text(text)
-    print(f"registered in {path}")
-
-# lakefile.lean: add the library glob.
-insert_after(
-    root / "lakefile.lean",
-    "    .andSubmodules `Contracts.Ledger,",
-    "    .andSubmodules `Contracts.Migraine,",
-)
-
-# Contracts.lean: import the module into the umbrella.
-insert_after(
-    root / "Contracts.lean",
-    "import Contracts.Ledger",
-    "import Contracts.Migraine",
-)
-
-# Contracts/Specs.lean: import + register the generated CompilationModel.
-specs = root / "Contracts" / "Specs.lean"
-insert_after(specs, "import Contracts.Ledger", "import Contracts.Migraine")
-insert_after(specs, "  Contracts.Ledger.spec,", "  Contracts.Migraine.spec,")
-PY
-
-echo "Migraine overlaid into $VERITY_DIR"
+# 4. Compile the model to Yul via the pinned Verity's compiler
+#    (bridge exe in lakefile.lean, rooted at the dep's Compiler.Main).
+printf 'Migraine\n' > migraine.manifest
+lake exe verity-compiler --manifest migraine.manifest -o artifacts/yul
+test -f artifacts/yul/Migraine.yul
+echo "Emitted artifacts/yul/Migraine.yul"

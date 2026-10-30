@@ -1,6 +1,6 @@
 /-
   Exact success-path proof for the closed-system `redeemTo`
-  (`Contracts.Migraine.System`): the full post-state of a successful
+  (`Migraine.System`): the full post-state of a successful
   redemption — payout at the floor rate quotient, token A pulled caller →
   wallet, token B pushed wallet → recipient, both allowances consumed, the
   `Redeemed` event appended. Proves SPEC P1/P2 (rate) and the positive half
@@ -15,8 +15,8 @@
   the pins via the upstream `transferFrom_unfold_other` +
   `Contract.eq_of_run_success`.
 -/
-import Contracts.Migraine.System
-import Contracts.Migraine.Proofs.System
+import Migraine.System
+import Migraine.Proofs.System
 import Verity.Proofs.Stdlib.Automation
 import Verity.Proofs.Stdlib.Math
 import Verity.Proofs.Stdlib.ListSum
@@ -30,11 +30,11 @@ set_option linter.unusedSimpArgs false
 open Verity
 open Verity.EVM.Uint256
 open Verity.Stdlib.Math
-open Contracts.Migraine.System
+open Migraine.System
 
 open Verity.Proofs.Stdlib.Automation (address_beq_false_of_ne)
 
-namespace Contracts.Migraine.Proofs.RedeemTo
+namespace Migraine.Proofs.RedeemTo
 
 /-- The `Redeemed` event appended by `redeemTo`, exactly as `emitEvent`
     puts it in `state.events`. -/
@@ -112,7 +112,7 @@ theorem chain_shape
         @ContractResult.success Uint256 amountB t2 := by
   verity_unfold redeemTo
   simp only [getTokenA, getTokenB, getWallet, getRateNum, getRateDen,
-    Contracts.contractAddress, Verity.contractAddress,
+    Verity.contractAddress,
     getStorage, getStorageAddr, emitEvent,
     requireSomeUint, Verity.require, Verity.pure, Verity.bind, Bind.bind,
     Pure.pure,
@@ -667,4 +667,4 @@ theorem redeem_eq_redeemTo_self (s : ContractState) (amountA : Uint256) :
   bind_run_success msgSender (fun sender => redeemTo amountA sender) s s.sender
     (msgSender_run s)
 
-end Contracts.Migraine.Proofs.RedeemTo
+end Migraine.Proofs.RedeemTo

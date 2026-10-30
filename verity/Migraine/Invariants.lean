@@ -4,7 +4,7 @@
 
 import Verity.Specs.Common
 
-namespace Contracts.Migraine.Invariants
+namespace Migraine.Invariants
 
 open Verity
 
@@ -13,4 +13,4 @@ structure WellFormedState (s : ContractState) : Prop where
   sender_nonzero : s.sender ≠ 0
   contract_nonzero : s.thisAddress ≠ 0
 
-end Contracts.Migraine.Invariants
+end Migraine.Invariants

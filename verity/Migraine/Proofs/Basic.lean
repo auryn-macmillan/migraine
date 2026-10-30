@@ -6,24 +6,24 @@
   redeemed amount by exactly the input, and leaves all other state untouched.
 -/
 
-import Contracts.Migraine.Spec
-import Contracts.Migraine.Invariants
+import Migraine.Spec
+import Migraine.Invariants
 import Verity.Proofs.Stdlib.Math
 import Verity.Proofs.Stdlib.Automation
 
 set_option linter.unusedSimpArgs false
 set_option linter.unusedVariables false
 
-namespace Contracts.Migraine.Proofs
+namespace Migraine.Proofs
 
 open Verity
 open Verity.EVM.Uint256
 open Verity.Stdlib.Math
 open Verity.Proofs.Stdlib.Math (safeAdd_some safeSub_some)
 open Verity.Proofs.Stdlib.Automation (uint256_ge_val_le)
-open Contracts.Migraine
-open Contracts.Migraine.Spec
-open Contracts.Migraine.Invariants
+open Migraine
+open Migraine.Spec
+open Migraine.Invariants
 
 /-! ## preview -/
 
@@ -183,4 +183,4 @@ theorem redeemed_monotone (s : ContractState) (amountA : Uint256)
   rw [Verity.Core.Uint256.addNoWrap hlt]
   exact Nat.le_add_right _ _
 
-end Contracts.Migraine.Proofs
+end Migraine.Proofs

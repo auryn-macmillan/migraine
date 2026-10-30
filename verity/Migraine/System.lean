@@ -1,6 +1,8 @@
 import Contracts.Common
+import Verity.Core
+import Verity.Macro
 
-namespace Contracts.Migraine.System
+namespace Migraine.System
 
 open Verity hiding pure bind
 open Verity.EVM.Uint256
@@ -184,4 +186,4 @@ def redeem (amountA : Uint256) : Contract Uint256 := do
   let sender ← msgSender
   redeemTo amountA sender
 
-end Contracts.Migraine.System
+end Migraine.System

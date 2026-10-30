@@ -3,21 +3,21 @@
   guard behaviour and well-formedness.
 -/
 
-import Contracts.Migraine.Proofs.Basic
+import Migraine.Proofs.Basic
 import Verity.Proofs.Stdlib.Automation
 
 set_option linter.unusedSimpArgs false
 set_option linter.unusedVariables false
 
-namespace Contracts.Migraine.Proofs.Correctness
+namespace Migraine.Proofs.Correctness
 
 open Verity
 open Verity.EVM.Uint256
 open Verity.Stdlib.Math
-open Contracts.Migraine
-open Contracts.Migraine.Spec
-open Contracts.Migraine.Proofs
-open Contracts.Migraine.Invariants
+open Migraine
+open Migraine.Spec
+open Migraine.Proofs
+open Migraine.Invariants
 
 /-! ## Guard behaviour -/
 
@@ -74,4 +74,4 @@ theorem redeem_preserves_wellformedness (s : ContractState) (amountA : Uint256)
   · rw [h_ctx.2.1]
     exact h_wf.contract_nonzero
 
-end Contracts.Migraine.Proofs.Correctness
+end Migraine.Proofs.Correctness

@@ -1,6 +1,6 @@
 import Contracts.Common
 
-namespace Contracts
+namespace Migraine
 
 open Verity hiding pure bind
 open Verity.EVM.Uint256
@@ -65,4 +65,13 @@ verity_contract Migraine where
     setStorage remainingInventoryB newInventory
     setStorage totalRedeemedA newRedeemed
 
-end Contracts
+/--
+Canonical compiler spec at the module-derived name the Verity compiler
+resolves for the manifest entry `Migraine.Model` (`Migraine.spec`).
+The macro-generated constant is `Migraine.Migraine.spec`; this is a
+transparent re-export so `lake exe verity-compiler` finds it without
+the old in-tree `Contracts/Specs.lean` registration.
+-/
+abbrev spec := Migraine.Migraine.spec
+
+end Migraine

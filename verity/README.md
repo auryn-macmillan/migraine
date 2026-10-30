@@ -8,7 +8,7 @@ each implementation to a `Prop`-valued specification with a proof.
 ## Files
 
 ```
-Contracts/Migraine/
+Migraine/
   Migraine.lean              reference model (`verity_contract` block)
   Spec.lean                  formal specification (`redeem_spec`, `preview_spec`, ...)
   Invariants.lean            well-formedness invariant
@@ -21,7 +21,7 @@ Contracts/Migraine/
                              revert atomicity (revert discards all writes)
   Proofs/RedeemTo.lean       closed-system success path + P1-P6 corollaries
   Proofs/AxiomCheck.lean     `#print axioms` gate for the redeem-path theorems
-Contracts/Migraine.lean      module re-export
+Migraine.lean                  module re-export (package root)
 ```
 
 ## What is proven
@@ -130,55 +130,32 @@ state a reentrant call could exploit. All of these are statements about the Veri
 deployed bytecode; the external-call mechanics of the real `safeTransferFrom`
 calls stay on Verity's trust boundary.
 
-## Build it inside a Verity checkout
+## Build it (self-contained package)
 
-Clone Verity and copy these files in:
-
-```bash
-git clone https://github.com/lfglabs-dev/verity.git
-cp -r verity/Contracts/Migraine      verity/Contracts/
-cp    verity/Contracts/Migraine.lean verity/Contracts/
-```
-
-Then register the module (three one-line edits):
-
-1. `lakefile.lean` — add to the `Contracts` library globs:
-   ```lean
-   .andSubmodules `Contracts.Migraine,
-   ```
-2. `Contracts.lean` — add:
-   ```lean
-   import Contracts.Migraine
-   ```
-3. `Contracts/Specs.lean` — add the import and the generated compiler model:
-   ```lean
-   import Contracts.Migraine
-   -- ...
-   def allSpecs : List CompilationModel := [
-     -- ...
-     Contracts.Migraine.spec,
-     -- ...
-   ]
-   ```
-
-Then verify the proofs and compile the artifact:
+This directory is a standalone Lake package: Verity is a pinned git
+dependency (`lakefile.lean` → `require verity from git …@"203a1788f"`),
+so there is no fork, no checkout overlay, and nothing to register inside
+Verity. One command builds everything:
 
 ```bash
-lake build Contracts.Migraine                       # model + all proofs
-lake build Contracts.Migraine.Proofs.AxiomCheck     # prints axiom sets: expect only propext/Quot.sound
+lake update    # fetch the pinned Verity (first time only)
+lake build                               # model + all proofs
+lake build Migraine.Proofs.AxiomCheck   # axiom sets: expect only propext/Quot.sound
+printf 'Migraine\n' > migraine.manifest
 lake exe verity-compiler --manifest migraine.manifest -o artifacts/yul
-grep -r "sorry" Contracts/Migraine/   # should be empty
+grep -r "sorry" Migraine/      # should be empty
 ```
 
-where `migraine.manifest` contains one line:
+`scripts/ci-verity.sh` runs exactly this sequence (plus the axiom-leak
+gate) and is what CI executes.
 
-```
-Contracts.Migraine.Migraine
-```
+To upgrade Verity, bump the pin in `lakefile.lean` and rebuild; the
+proof tree must go green against the new core before the bump lands.
 
-This repository was verified against Verity `leanprover/lean4:v4.31.0`: the
-whole `Contracts` library builds successfully and the compiler emits
-[`artifacts/Migraine.yul`](./artifacts/Migraine.yul). The
+This package was verified against Verity `203a1788f`
+(`leanprover/lean4:v4.31.0`, pinned in `lean-toolchain`): the whole
+`Migraine` library builds successfully and the compiler emits
+[`artifacts/yul/Migraine.yul`](./artifacts/yul/Migraine.yul). The
 generated runtime performs the guards and the fixed-rate math exactly as
 specified, e.g. `amountB := div(mul(amountA, 25), 10)`.
 

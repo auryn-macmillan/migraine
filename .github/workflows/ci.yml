@@ -14,11 +14,6 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-env:
-  # Verity revision the proofs were developed and verified against.
-  VERITY_REPO: https://github.com/lfglabs-dev/verity.git
-  VERITY_REV: 203a1788f38e1e6f157a0ec8d233bbf2ac789e18
-
 jobs:
   # ---------------------------------------------------------------------------
   # Solidity: build, format, lint, unit/integration/fuzz/invariant tests.
@@ -89,61 +84,25 @@ jobs:
             | sh -s -- -y --default-toolchain none
           echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
 
-      - name: Clone Verity at the pinned revision
-        run: |
-          git clone "$VERITY_REPO" verity-upstream
-          git -C verity-upstream checkout "$VERITY_REV"
-          cat verity-upstream/lean-toolchain
-
       - name: Cache Lean toolchain, Mathlib and build artifacts
         uses: actions/cache@v4
         with:
           path: |
             ~/.elan
             ~/.cache/mathlib
-            verity-upstream/.lake
-          key: verity-${{ runner.os }}-${{ env.VERITY_REV }}-${{ hashFiles('verity/Contracts/**', 'scripts/ci-verity.sh') }}
+            verity/.lake
+          key: verity-${{ runner.os }}-${{ hashFiles('verity/lakefile.lean', 'verity/lean-toolchain') }}-${{ hashFiles('verity/Migraine/**', 'verity/Migraine.lean', 'scripts/ci-verity.sh') }}
           restore-keys: |
-            verity-${{ runner.os }}-${{ env.VERITY_REV }}-
+            verity-${{ runner.os }}-${{ hashFiles('verity/lakefile.lean', 'verity/lean-toolchain') }}-
 
-      - name: Overlay Migraine and register with the build
-        run: bash scripts/ci-verity.sh verity-upstream
-
-      - name: Build the formal specification and proofs
-        working-directory: verity-upstream
-        run: |
-          lake build Contracts.Migraine.Proofs.Correctness
-          lake build Contracts.Migraine
-
-      - name: Fail on any sorry / admit
-        working-directory: verity-upstream
-        run: |
-          lake build Contracts.Migraine.Proofs.AxiomCheck 2>&1 | tee axiomcheck.log
-          if grep -E "depends on axioms" axiomcheck.log | grep -E "sorryAx|natLitAxiom|ofReduceBool|ofReduceNat"; then
-            echo "::error::Axiom leak: proofs depend on a non-standard axiom"
-            exit 1
-          fi
-          echo "Axiom gate clean."
-          if grep -rnE '\bsorry\b|\badmit\b' Contracts/Migraine/; then
-            echo "::error::Found sorry/admit in the Migraine proofs"
-            exit 1
-          fi
-          echo "No sorry/admit found."
-
-      - name: Verify compiler registration and emit Yul
-        working-directory: verity-upstream
-        run: |
-          lake build Contracts.Specs
-          printf 'Contracts.Migraine.Migraine\n' > migraine.manifest
-          lake exe verity-compiler --manifest migraine.manifest -o artifacts/yul
-          test -f artifacts/yul/Migraine.yul
-          echo "Emitted artifacts/yul/Migraine.yul"
+      - name: Build, gate and compile (self-contained verity/ package)
+        run: bash scripts/ci-verity.sh
 
       - name: Upload generated Yul artifact
         uses: actions/upload-artifact@v4
         with:
           name: Migraine-yul
-          path: verity-upstream/artifacts/yul/Migraine.yul
+          path: verity/artifacts/yul/Migraine.yul
           if-no-files-found: error
 
       - name: Publish verification badge — passing (main only)

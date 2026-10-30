@@ -1,5 +1,5 @@
 /-
-  Proofs about the closed-system model `Contracts.Migraine.System`, which
+  Proofs about the closed-system model `Migraine.System`, which
   mirrors `src/Migraine.sol` together with the two standard ERC-20 ledgers it
   transacts against.
 
@@ -17,7 +17,7 @@
                                 statelessness at the end of this file)
 -/
 
-import Contracts.Migraine.System
+import Migraine.System
 import Verity.Proofs.Stdlib.Automation
 import Verity.Proofs.Stdlib.Math
 import Verity.Proofs.Stdlib.ListSum
@@ -26,13 +26,13 @@ set_option linter.unusedSimpArgs false
 set_option linter.unusedVariables false
 set_option maxRecDepth 16000
 
-namespace Contracts.Migraine.Proofs.System
+namespace Migraine.Proofs.System
 
 open Verity
 open Verity.EVM.Uint256
 open Verity.Stdlib.Math
-open Contracts.Migraine
-open Contracts.Migraine.System
+open Migraine
+open Migraine.System
 open Verity.Proofs.Stdlib.Automation (uint256_ge_val_le address_beq_false_of_ne)
 open Verity.Proofs.Stdlib.Math (safeAdd_some safeSub_some)
 open Verity.Proofs.Stdlib.ListSum
@@ -81,7 +81,7 @@ theorem deploy_meets_spec (s : ContractState) (tokenA tokenB wallet : Address)
     (∀ sl, sl ∉ configSlots → s'.storageAddr sl = s.storageAddr sl) := by
   simp only [deploy, getTokenA, getTokenB, getWallet, getRateNum, getRateDen,
     getStorage, getStorageAddr, setStorage, setStorageAddr,
-    Contracts.contractAddress, Verity.contractAddress,
+    Verity.contractAddress,
     Verity.require, Verity.bind, Bind.bind, Verity.pure, Pure.pure,
     Contract.run, tokenASlot, tokenBSlot, walletSlot,
     rateNumSlot, rateDenSlot] at h_spec
@@ -155,7 +155,7 @@ theorem transferFrom_unfold_other (s : ContractState)
   have h_safe' : safeAdd (s.storageWords (StorageKey.map balSlot.slot dstAddr)) amount =
       some (s.storageWords (StorageKey.map balSlot.slot dstAddr) + amount) := h_safe
   verity_unfold transferFrom
-  simp only [Contracts.contractAddress, Verity.contractAddress, getMapping, getMapping2,
+  simp only [Verity.contractAddress, getMapping, getMapping2,
     setMapping, setMapping2, ContractState.readMap, ContractState.readMap2,
     ContractState.writeMap, ContractState.writeMap2, requireSomeUint, Verity.require,
     Verity.pure, Verity.bind, Bind.bind, Pure.pure, Contract.run, bne,
@@ -200,7 +200,7 @@ theorem transferFrom_unfold_max (s : ContractState)
   have h_safe' : safeAdd (s.storageWords (StorageKey.map balSlot.slot dstAddr)) amount =
       some (s.storageWords (StorageKey.map balSlot.slot dstAddr) + amount) := h_safe
   verity_unfold transferFrom
-  simp only [Contracts.contractAddress, Verity.contractAddress, getMapping, getMapping2,
+  simp only [Verity.contractAddress, getMapping, getMapping2,
     setMapping, setMapping2, ContractState.readMap, ContractState.readMap2,
     ContractState.writeMap, ContractState.writeMap2, requireSomeUint, Verity.require,
     Verity.pure, Verity.bind, Bind.bind, Pure.pure, Contract.run, bne,
@@ -216,4 +216,4 @@ theorem transferFrom_unfold_max (s : ContractState)
   funext slotIdx
   split <;> simp [*]
 
-end Contracts.Migraine.Proofs.System
+end Migraine.Proofs.System
