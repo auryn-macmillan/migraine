@@ -118,6 +118,12 @@ jobs:
       - name: Fail on any sorry / admit
         working-directory: verity-upstream
         run: |
+          lake build Contracts.Migraine.Proofs.AxiomCheck 2>&1 | tee axiomcheck.log
+          if grep -E "depends on axioms" axiomcheck.log | grep -E "sorryAx|natLitAxiom|ofReduceBool|ofReduceNat"; then
+            echo "::error::Axiom leak: proofs depend on a non-standard axiom"
+            exit 1
+          fi
+          echo "Axiom gate clean."
           if grep -rnE '\bsorry\b|\badmit\b' Contracts/Migraine/; then
             echo "::error::Found sorry/admit in the Migraine proofs"
             exit 1

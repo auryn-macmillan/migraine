@@ -112,9 +112,17 @@ recipient blacklist, `Redeemed` event, two `transferFrom` legs):
   discards every write: rollback-by-construction in the model's
   checks-before-effects ordering.
 
-P2 (one-way) and P7 (reentrancy-harmless) remain structural: the model has no
-reverse entrypoint, and the contract holds no mutable state a reentrant call
-could exploit. All of these are statements about the Verity model, not the
+- `redeem_eq_redeemTo_self` (P2) — `redeem(amountA)` is definitionally
+  `redeemTo(amountA, msg.sender)`, so the single proven `redeemTo` path covers
+  both entrypoints: there is no second code path and no way for token A to
+  flow back toward the redeemer or any reverse direction.
+- Idealized-model corollaries (`Proofs/Basic.lean`):
+  `redeem_conserves_inventory`, `inventory_never_increases`,
+  `redeemed_monotone` — the three SPEC properties previously cited but
+  unproven are now derived from `redeem_meets_spec`.
+
+P7 (reentrancy-harmless) remains structural: the contract holds no mutable
+state a reentrant call could exploit. All of these are statements about the Verity model, not the
 deployed bytecode; the external-call mechanics of the real `safeTransferFrom`
 calls stay on Verity's trust boundary.
 

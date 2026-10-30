@@ -529,4 +529,15 @@ theorem preserves_config (s : ContractState) (sender wallet recipient : Address)
       ContractState.writeMap, ContractState.writeMap2, StorageKey.slot, StorageKey.addr,
       evState]
 
+/-! ## `redeem` is `redeemTo` to the caller -/
+
+/-- The `redeem(amountA)` entrypoint is definitionally `redeemTo(amountA,
+    msg.sender)`: the two calls produce identical results and post-states
+    from any state, so every `redeemTo` theorem (success post-state,
+    revert atomicity, conservation) transfers verbatim. -/
+theorem redeem_eq_redeemTo_self (s : ContractState) (amountA : Uint256) :
+    (redeem amountA).run s = (redeemTo amountA s.sender).run s :=
+  bind_run_success msgSender (fun sender => redeemTo amountA sender) s s.sender
+    (msgSender_run s)
+
 end Contracts.Migraine.Proofs.RedeemTo

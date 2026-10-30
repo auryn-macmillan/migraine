@@ -384,7 +384,8 @@ contract MigraineTest is TestBase {
 
     /// @dev Largest amountA whose payout floor(amountA * 3 / 2) still fits in uint256:
     ///      floor((2^257 - 1) / 3); the payout is exactly type(uint256).max.
-    uint256 private constant MAX_SAFE_AMOUNT_A = 77194726158210796949047323339125271902179989777093709359638389338608753093290;
+    uint256 private constant MAX_SAFE_AMOUNT_A =
+        77194726158210796949047323339125271902179989777093709359638389338608753093290;
 
     function test_PreviewRedeem_MaxSafeAmountPayoutIsMaxUint() public view {
         assertEq(redeemer.previewRedeem(MAX_SAFE_AMOUNT_A), type(uint256).max);

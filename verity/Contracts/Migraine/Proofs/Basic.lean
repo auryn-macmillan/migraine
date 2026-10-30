@@ -119,4 +119,68 @@ theorem redeem_debits_payout (s : ContractState) (amountA : Uint256)
   simp only [redeem_spec] at h
   exact ⟨h.1, h.2.1⟩
 
+/-! ## Spec-property corollaries
+
+The three properties `Spec.lean` declares as proof targets for the
+idealized accounting model. Each is a direct consequence of
+`redeem_meets_spec` for a *successful* redemption. -/
+
+/-- **Inventory conservation.** For any successful redemption, the inventory
+    drop equals the previewed payout: `preview_spec` applied to the actual
+    debit. -/
+theorem redeem_conserves_inventory (s : ContractState) (amountA : Uint256)
+    (h_nonzero : amountA > 0)
+    (h_output : payout amountA > 0)
+    (h_inv : s.storage 0 >= payout amountA)
+    (h_no_overflow : (s.storage 1 : Nat) + (amountA : Nat) ≤ MAX_UINT256) :
+    let s' := ((redeem amountA).run s).snd
+    redeem_conserves_inventory amountA s s' := by
+  have h := redeem_meets_spec s amountA h_nonzero h_output h_inv h_no_overflow
+  simp only [redeem_spec] at h
+  simp only [Spec.redeem_conserves_inventory, Spec.preview_spec]
+  rw [h.1]
+  apply Verity.Core.Uint256.ext
+  have hinv : (payout amountA).val ≤ (s.storage 0).val := uint256_ge_val_le h_inv
+  have hsp : (sub (s.storage 0) (payout amountA)).val =
+      (s.storage 0).val - (payout amountA).val := Verity.Core.Uint256.subNoWrap hinv
+  have h2 : (sub (s.storage 0) (payout amountA)).val ≤ (s.storage 0).val := by
+    rw [hsp]; exact Nat.sub_le _ _
+  rw [Verity.Core.Uint256.subNoWrap h2, hsp]
+  omega
+
+/-- **Inventory monotonicity.** A successful redemption never increases the
+    remaining `tokenB` inventory. -/
+theorem inventory_never_increases (s : ContractState) (amountA : Uint256)
+    (h_nonzero : amountA > 0)
+    (h_output : payout amountA > 0)
+    (h_inv : s.storage 0 >= payout amountA)
+    (h_no_overflow : (s.storage 1 : Nat) + (amountA : Nat) ≤ MAX_UINT256) :
+    let s' := ((redeem amountA).run s).snd
+    inventory_never_increases s s' := by
+  have h := redeem_meets_spec s amountA h_nonzero h_output h_inv h_no_overflow
+  simp only [redeem_spec] at h
+  simp only [Spec.inventory_never_increases]
+  rw [h.1]
+  rw [Verity.Core.Uint256.subNoWrap (uint256_ge_val_le h_inv)]
+  exact Nat.sub_le _ _
+
+/-- **Redeemed-amount monotonicity.** A successful redemption never decreases
+    the cumulative redeemed `tokenA` total. -/
+theorem redeemed_monotone (s : ContractState) (amountA : Uint256)
+    (h_nonzero : amountA > 0)
+    (h_output : payout amountA > 0)
+    (h_inv : s.storage 0 >= payout amountA)
+    (h_no_overflow : (s.storage 1 : Nat) + (amountA : Nat) ≤ MAX_UINT256) :
+    let s' := ((redeem amountA).run s).snd
+    redeemed_monotone s s' := by
+  have h := redeem_meets_spec s amountA h_nonzero h_output h_inv h_no_overflow
+  simp only [redeem_spec] at h
+  simp only [Spec.redeemed_monotone]
+  rw [h.2.1]
+  have hlt : (s.storage 1 : Nat) + (amountA : Nat) < modulus := by
+    have hmax : MAX_UINT256 < modulus := by decide
+    omega
+  rw [Verity.Core.Uint256.addNoWrap hlt]
+  exact Nat.le_add_right _ _
+
 end Contracts.Migraine.Proofs
