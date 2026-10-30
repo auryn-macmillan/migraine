@@ -169,4 +169,51 @@ theorem transferFrom_unfold_other (s : ContractState)
   funext slotIdx
   split <;> simp [*]
 
+/-- The infinite-approval `transferFrom` path: when the spender's allowance is
+    `MAX_UINT256` (mirroring OZ v5 `_spendAllowance`'s max-uint skip), the
+    transfer moves balances but leaves the allowance untouched. Companion of
+    `transferFrom_unfold_other`; discharges the non-MAX premise. -/
+theorem transferFrom_unfold_max (s : ContractState)
+    (balSlot : StorageSlot (Address → Uint256))
+    (allowSlot : StorageSlot (Address → Address → Uint256))
+    (srcAddr dstAddr : Address) (amount : Uint256)
+    (h_max : s.storageMap2 allowSlot.slot srcAddr s.thisAddress = MAX_UINT256)
+    (h_bal : s.storageMap balSlot.slot srcAddr ≥ amount)
+    (h_ne : srcAddr ≠ dstAddr)
+    (h_no_overflow : (s.storageMap balSlot.slot dstAddr : Nat) + (amount : Nat) ≤ MAX_UINT256) :
+    (transferFrom balSlot allowSlot srcAddr dstAddr amount).run s = ContractResult.success ()
+      { (s.writeMap balSlot.slot srcAddr (EVM.Uint256.sub (s.storageMap balSlot.slot srcAddr) amount)).writeMap
+          balSlot.slot dstAddr (EVM.Uint256.add (s.storageMap balSlot.slot dstAddr) amount) with
+        knownAddresses := fun slotIdx =>
+          if slotIdx == balSlot.slot then
+            ((s.knownAddresses slotIdx).insert srcAddr).insert dstAddr
+          else s.knownAddresses slotIdx } := by
+  have h_safe := safeAdd_some (s.storageMap balSlot.slot dstAddr) amount h_no_overflow
+  have h_beq_true : (s.storageMap2 allowSlot.slot srcAddr s.thisAddress == Core.Uint256.ofNat MAX_UINT256) = true := by
+    simp [h_max]
+  have h_beq_self : (Core.Uint256.ofNat MAX_UINT256 == Core.Uint256.ofNat MAX_UINT256) = true := by
+    decide
+  have h_ge : amount ≤ Core.Uint256.ofNat MAX_UINT256 := by
+    have h_mod : MAX_UINT256 % Core.Uint256.modulus = MAX_UINT256 := by decide
+    simp [Core.Uint256.le_def, h_mod, Core.Uint256.val_le_max]
+  have h_bal' : s.storageWords (StorageKey.map balSlot.slot srcAddr) ≥ amount := h_bal
+  have h_safe' : safeAdd (s.storageWords (StorageKey.map balSlot.slot dstAddr)) amount =
+      some (s.storageWords (StorageKey.map balSlot.slot dstAddr) + amount) := h_safe
+  verity_unfold transferFrom
+  simp only [Contracts.contractAddress, Verity.contractAddress, getMapping, getMapping2,
+    setMapping, setMapping2, ContractState.readMap, ContractState.readMap2,
+    ContractState.writeMap, ContractState.writeMap2, requireSomeUint, Verity.require,
+    Verity.pure, Verity.bind, Bind.bind, Pure.pure, Contract.run, bne,
+    Bool.not_eq_true',
+    ContractState.storageMap, StorageKey.map_ne_map2,
+    h_max, h_bal, h_bal', h_ne, h_beq_true, h_beq_self, h_ge,
+    beq_iff_eq, decide_eq_true_eq,
+    ite_true, ite_false,
+    h_safe, h_safe', HAdd.hAdd,
+    if_neg (by decide : ¬ (true = false))]
+  congr 1
+  congr 1
+  funext slotIdx
+  split <;> simp [*]
+
 end Contracts.Migraine.Proofs.System

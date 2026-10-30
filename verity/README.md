@@ -99,6 +99,10 @@ recipient blacklist, `Redeemed` event, two `transferFrom` legs):
   blacklist, `redeemTo` succeeds paying exactly the floored quotient
   `amountB`; token A moves sender -> vault, token B moves vault -> recipient,
   both allowances are consumed, and the `Redeemed` event is appended.
+- `redeemTo_success_run_max` — the same success path for `MAX_UINT256`
+  ("infinite") approvals: identical payout and balance movements, but neither
+  allowance is consumed, matching OpenZeppelin `_spendAllowance` max-skip
+  semantics (and the `transferFrom_unfold_max` model branch).
 - Exact pointwise balance effects — recipient `+amountB` of token B, vault
   `-amountB +amountA`, sender `-amountA` of token A, every other address
   unchanged on both tokens.

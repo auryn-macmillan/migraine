@@ -8,6 +8,7 @@ import Contracts.Migraine.Proofs.Basic
 
 #print axioms Contracts.Migraine.Proofs.RedeemTo.chain_shape
 #print axioms Contracts.Migraine.Proofs.RedeemTo.redeemTo_success_run
+#print axioms Contracts.Migraine.Proofs.RedeemTo.redeemTo_success_run_max
 #print axioms Contracts.Migraine.Proofs.RedeemTo.redeem_eq_redeemTo_self
 #print axioms Contracts.Migraine.Proofs.RedeemTo.no_custody
 #print axioms Contracts.Migraine.Proofs.RedeemTo.other_slot_unchanged

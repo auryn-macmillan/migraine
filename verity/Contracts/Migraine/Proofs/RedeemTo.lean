@@ -241,6 +241,133 @@ theorem redeemTo_success_run
     h_wordB h_ne_wallet_ev hTF1 hTF2
 
 
+/-- State after leg A when the spender's allowance is `MAX_UINT256`: the
+    allowance is NOT consumed (OZ v5 `_spendAllowance` max-skip); only the
+    balances move. Mirrors `transferFrom_unfold_max`'s post-state shape. -/
+def S1_max (s : ContractState) (sender wallet : Address) (amountA : Uint256) :
+    ContractState :=
+  { (s.writeMap balASlot.slot sender
+        (EVM.Uint256.sub (s.storageMap balASlot.slot sender) amountA)).writeMap
+        balASlot.slot wallet
+        (EVM.Uint256.add (s.storageMap balASlot.slot wallet) amountA) with
+    knownAddresses := fun slotIdx =>
+      if slotIdx == balASlot.slot then
+        ((s.knownAddresses slotIdx).insert sender).insert wallet
+      else s.knownAddresses slotIdx }
+
+/-- Full `redeemTo` post-state under infinite (MAX_UINT256) allowances:
+    balances move on both legs, no allowance is consumed. -/
+def finalState_max (s0 : ContractState) (wallet recipient : Address)
+    (amountB : Uint256) : ContractState :=
+  { (s0.writeMap balBSlot.slot wallet
+        (EVM.Uint256.sub (s0.storageMap balBSlot.slot wallet) amountB)).writeMap
+        balBSlot.slot recipient
+        (EVM.Uint256.add (s0.storageMap balBSlot.slot recipient) amountB) with
+    knownAddresses := fun slotIdx =>
+      if slotIdx == balBSlot.slot then
+        ((s0.knownAddresses slotIdx).insert wallet).insert recipient
+      else s0.knownAddresses slotIdx }
+
+/-- **`redeemTo` success path with infinite allowances.** Companion of
+    `redeemTo_success_run` for `MAX_UINT256` approvals (the common
+    "approve once" pattern, and the shape the Foundry suite funds tests
+    with): the payout and balance movements are identical, but neither
+    allowance is consumed. Closes the non-MAX premise gap. -/
+theorem redeemTo_success_run_max
+    (s : ContractState) (amountA amountB : Uint256)
+    (wallet num den recipient : Address)
+    (h_num : s.storage rateNumSlot.slot = num)
+    (h_den : s.storage rateDenSlot.slot = den)
+    (h_amountB : mulDiv512Down? amountA num den = some amountB)
+    (h_posA : amountA > 0)
+    (h_posB : amountB > 0)
+    (h_recipient_nonzero : recipient ≠ 0)
+    (h_recipient_ne_this : recipient ≠ s.thisAddress)
+    (h_recipient_ne_tokenA : recipient ≠ s.storageAddr tokenASlot.slot)
+    (h_recipient_ne_tokenB : recipient ≠ s.storageAddr tokenBSlot.slot)
+    (h_recipient_ne_wallet : recipient ≠ wallet)
+    (h_tokA : s.storageAddr tokenASlot.slot ≠ 0)
+    (h_tokB : s.storageAddr tokenBSlot.slot ≠ 0)
+    (h_wallet : s.storageAddr walletSlot.slot = wallet)
+    (h_maxA : s.storageMap2 allowASlot.slot s.sender s.thisAddress = MAX_UINT256)
+    (h_balA : s.storageMap balASlot.slot s.sender ≥ amountA)
+    (h_neA : s.sender ≠ wallet)
+    (h_noOvfA : (s.storageMap balASlot.slot wallet : Nat) + (amountA : Nat) ≤ MAX_UINT256)
+    (h_maxB : s.storageMap2 allowBSlot.slot wallet s.thisAddress = MAX_UINT256)
+    (h_balB : s.storageMap balBSlot.slot wallet ≥ amountB)
+    (h_neB : wallet ≠ recipient)
+    (h_noOvfB : (s.storageMap balBSlot.slot recipient : Nat) + (amountB : Nat) ≤ MAX_UINT256) :
+    (redeemTo amountA recipient).run s =
+      ContractResult.success amountB
+        (finalState_max (S1_max (evState s s.sender recipient amountA amountB) s.sender wallet amountA)
+          wallet recipient amountB) := by
+  have h_walletW : wordToAddress (s.storageWords (StorageKey.addr walletSlot.slot)) = wallet := by
+    show s.storageAddr walletSlot.slot = wallet
+    exact h_wallet
+  have h_wallet_ev : wordToAddress
+      ((evState s s.sender recipient amountA amountB).storageWords
+        (StorageKey.addr walletSlot.slot)) = wallet := by
+    simp [evState]; exact h_walletW
+  have h_ne_wallet_ev : recipient ≠
+      wordToAddress ((evState s s.sender recipient amountA amountB).storageWords
+        (StorageKey.addr walletSlot.slot)) := by
+    rw [h_wallet_ev]; exact h_recipient_ne_wallet
+  have h_wordA : recipient ≠
+      wordToAddress (s.storageWords (StorageKey.addr tokenASlot.slot)) := by
+    show recipient ≠ s.storageAddr tokenASlot.slot; exact h_recipient_ne_tokenA
+  have h_wordB : recipient ≠
+      wordToAddress (s.storageWords (StorageKey.addr tokenBSlot.slot)) := by
+    show recipient ≠ s.storageAddr tokenBSlot.slot; exact h_recipient_ne_tokenB
+  have hTF1 : transferFrom balASlot allowASlot s.sender
+        (wordToAddress (s.storageWords (StorageKey.addr walletSlot.slot)))
+        amountA { s with events := s.events ++
+          [{ name := "Redeemed", args := [amountA, amountB],
+             indexedArgs := [addressToWord s.sender, addressToWord recipient] }] }
+        = @ContractResult.success Unit ()
+          (S1_max (evState s s.sender recipient amountA amountB) s.sender wallet amountA) := by
+    rw [h_walletW]
+    exact Contract.eq_of_run_success
+      (Proofs.System.transferFrom_unfold_max
+        (evState s s.sender recipient amountA amountB)
+        balASlot allowASlot s.sender wallet amountA h_maxA h_balA h_neA h_noOvfA)
+  -- Leg B preconditions pass through the event update and leg A (which
+  -- touches only events and token-A slots under the max-skip).
+  have h_maxB_S1 :
+      (S1_max (evState s s.sender recipient amountA amountB) s.sender wallet amountA).storageMap2
+        allowBSlot.slot wallet s.thisAddress = MAX_UINT256 := by
+    simp [S1_max, evState, ContractState.storage, ContractState.storageMap2,
+      ContractState.writeMap, ContractState.writeMap2]; exact h_maxB
+  have h_balB_S1 :
+      (S1_max (evState s s.sender recipient amountA amountB) s.sender wallet amountA).storageMap
+        balBSlot.slot wallet ≥ amountB := by
+    simp [S1_max, evState, ContractState.storage, ContractState.storageMap,
+      ContractState.writeMap, ContractState.writeMap2]; exact h_balB
+  have h_noOvfB_S1 :
+      ((S1_max (evState s s.sender recipient amountA amountB) s.sender wallet amountA).storageMap
+        balBSlot.slot recipient : Nat) + (amountB : Nat) ≤ MAX_UINT256 := by
+    simp [S1_max, evState, ContractState.storage, ContractState.storageMap,
+      ContractState.writeMap, ContractState.writeMap2]; exact h_noOvfB
+  have hTF2 : transferFrom balBSlot allowBSlot
+        (wordToAddress (s.storageWords (StorageKey.addr walletSlot.slot)))
+        recipient amountB
+        (S1_max (evState s s.sender recipient amountA amountB) s.sender wallet amountA)
+        = @ContractResult.success Unit ()
+          (finalState_max (S1_max (evState s s.sender recipient amountA amountB) s.sender wallet amountA)
+            wallet recipient amountB) := by
+    rw [h_walletW]
+    exact Contract.eq_of_run_success
+      (Proofs.System.transferFrom_unfold_max
+        (S1_max (evState s s.sender recipient amountA amountB) s.sender wallet amountA)
+        balBSlot allowBSlot wallet recipient amountB
+        h_maxB_S1 h_balB_S1 h_neB h_noOvfB_S1)
+  exact chain_shape amountA amountB recipient num den s
+    (S1_max (evState s s.sender recipient amountA amountB) s.sender wallet amountA)
+    (finalState_max (S1_max (evState s s.sender recipient amountA amountB) s.sender wallet amountA)
+      wallet recipient amountB)
+    h_posA h_posB h_num h_den h_amountB
+    h_recipient_nonzero h_recipient_ne_this h_wordA
+    h_wordB h_ne_wallet_ev hTF1 hTF2
+
 
 /-! ## Corollaries: exact effects, no custody, conservation, immutability
     (P1/P3–P6 read off the success path)
