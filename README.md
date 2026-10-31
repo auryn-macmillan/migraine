@@ -130,7 +130,7 @@ every successful redemption debits the inventory by exactly the previewed payout
 and preserves all other state.
 
 See [`verity/README.md`](./verity/README.md) for what is proven, what sits on
-Verity's trusted boundary, and how to build it inside a Verity checkout.
+Verity's trusted boundary, and how the `verity/` package is built and pinned.
 
 ## Continuous integration
 
@@ -143,10 +143,10 @@ pull request:
   derives the `src/` line-coverage percentage and, on `main`, publishes it to a
   `badges` branch that backs the coverage badge above (`src/Migraine.sol` is
   currently 100% line/branch/function covered).
-- **Verity** — installs the Lean toolchain, clones Verity at a pinned revision,
-  overlays the `Migraine` model via `scripts/ci-verity.sh`, builds the
-  proofs (`lake build Contracts.Migraine.Proofs.Correctness`), fails on
-  any `sorry`/`admit`, registers the compiler model and emits
+- **Verity** — installs the Lean toolchain and builds the self-contained
+  `verity/` package (which pins Verity as a git dependency, so nothing is
+  cloned or overlaid into the repo): `scripts/ci-verity.sh` builds the proofs,
+  fails on any `sorry`/`admit` or non-standard axiom, and emits
   `Migraine.yul` as a build artifact. On `main` it publishes the
   **formal verification** badge (a `badges-verification` branch, `passing` /
   `failing`), so the proof status is visible without reading the workflow.

@@ -133,9 +133,17 @@ calls stay on Verity's trust boundary.
 ## Build it (self-contained package)
 
 This directory is a standalone Lake package: Verity is a pinned git
-dependency (`lakefile.lean` → `require verity from git …@"203a1788f"`),
+dependency (`lakefile.lean` → `require verity from git …@"ac82752cc"`),
 so there is no fork, no checkout overlay, and nothing to register inside
-Verity. One command builds everything:
+Verity. The proof tree is namespaced `Migraine` (not `Contracts.*`, which
+would collide with Verity's own example library) and pins its own Lean
+toolchain (`lean-toolchain`) matching the dependency's. To upgrade Verity,
+bump the pin and rebuild; the proofs must stay green against the new core.
+
+> Why a package and not an in-tree contract: Verity's kernel and proof
+> libraries are not a stable API, so the Migraine proofs are kept in their
+> own repo pinned to a specific Verity revision — CI must stay green before
+> the pin is bumped. See `scripts/ci-verity.sh`.
 
 ```bash
 lake update    # fetch the pinned Verity (first time only)

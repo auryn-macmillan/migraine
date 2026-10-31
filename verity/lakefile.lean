@@ -12,7 +12,7 @@ package «migraine-verity» where
   version := v!"1.0.0"
 
 require verity from git
-  "https://github.com/lfglabs-dev/verity.git"@"203a1788f"
+  "https://github.com/lfglabs-dev/verity.git"@"ac82752cc"
 
 /--
 The Migraine model, spec, invariants and proofs. The umbrella module

@@ -26,7 +26,8 @@ lake build Migraine.Proofs.Correctness
 lake build Migraine
 
 # 3. Axiom gate: every redeem-path theorem must rest only on Lean's
-#    standard axioms. Any sorryAx / native-decide leak fails the build.
+#    standard axioms. `Classical.choice` (classical logic) is standard and
+#    allowed; `sorryAx`/`natLitAxiom`/`ofReduce*` are real leaks.
 lake build Migraine.Proofs.AxiomCheck 2>&1 | tee axiomcheck.log
 if grep -E "depends on axioms" axiomcheck.log | grep -E "sorryAx|natLitAxiom|ofReduceBool|ofReduceNat"; then
   echo "::error::Axiom leak: proofs depend on a non-standard axiom" >&2

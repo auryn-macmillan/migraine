@@ -24,10 +24,8 @@ jobs:
     permissions:
       contents: write # needed to publish the coverage badge branch
     steps:
-      - name: Check out repository (with submodules)
+      - name: Check out repository
         uses: actions/checkout@v4
-        with:
-          submodules: recursive
 
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
