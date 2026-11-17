@@ -90,34 +90,7 @@ contract MigraineHandler is Test {
 
     /// @notice Success path with a contract recipient (the handler itself).
     function redeemToContract(uint256 actorSeed, uint256 amountA) external {
-        address actor = actors[bound(actorSeed, 0, actors.length - 1)];
-        amountA = bound(amountA, 1, 1_000e18);
-
-        uint256 balA = tokenA.balanceOf(actor);
-        if (balA < amountA) {
-            tokenA.mint(actor, amountA - balA);
-        }
-        vm.prank(actor);
-        tokenA.approve(address(redeemer), type(uint256).max);
-
-        uint256 needB = Math.mulDiv(amountA, rateNum, rateDen);
-        if (needB == 0) {
-            return;
-        }
-        uint256 balB = tokenB.balanceOf(vault);
-        if (balB < needB) {
-            tokenB.mint(vault, needB - balB);
-            ghostInjectedB += needB - balB;
-        }
-        vm.prank(vault);
-        tokenB.approve(address(redeemer), type(uint256).max);
-
-        vm.prank(actor);
-        try redeemer.redeemTo(amountA, address(this)) returns (uint256 amountB) {
-            assertEq(amountB, needB, "per-call rate violated");
-            ghostTotalAIn += amountA;
-            ghostTotalBOut += amountB;
-        } catch {}
+        _perform(actors[bound(actorSeed, 0, actors.length - 1)], amountA, address(this), true);
     }
 
     function _perform(address actor, uint256 amountA, address recipient, bool useRedeemTo) internal {

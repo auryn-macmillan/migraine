@@ -101,6 +101,10 @@
         setStatus("No browser wallet found. Install MetaMask.", "error");
         return;
       }
+      if (CONFIG.chainId == null) {
+        setStatus("Set chainId in config.js before using this page.", "error");
+        return;
+      }
       setStatus("Connecting\u2026");
       const provider = new ethers.BrowserProvider(window.ethereum);
       await provider.send("eth_requestAccounts", []);
@@ -108,7 +112,7 @@
       const account = await signer.getAddress();
 
       const network = await provider.getNetwork();
-      if (CONFIG.chainId != null && Number(network.chainId) !== Number(CONFIG.chainId)) {
+      if (Number(network.chainId) !== Number(CONFIG.chainId)) {
         setStatus(
           "Wrong network: expected chain " + CONFIG.chainId + ", got " + network.chainId + ".",
           "error"

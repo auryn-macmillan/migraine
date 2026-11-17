@@ -8,8 +8,9 @@
 
 A small, immutable, permissionless on-chain exchange: anyone can redeem
 **token A** for **token B** at a **fixed rate**, in one direction only. The
-token B inventory lives in a separate vault wallet (e.g. a Gnosis Safe), and the
-redeemer contract never holds any tokens itself.
+token B inventory lives in a separate vault wallet (e.g. a Gnosis Safe), and a
+redemption never routes tokens through the redeemer contract itself (tokens sent
+to it by mistake can be swept to the vault).
 
 This repository contains four deliverables:
 
@@ -114,7 +115,8 @@ Before users can redeem, the vault wallet must:
    `tokenB`.
 
 The allowance is the live cap: the redeemer can never pay out more `tokenB`
-than the vault has approved, and each redemption uses some of it up. The vault
+than the vault has approved, and each redemption uses some of it up (an unlimited
+`type(uint256).max` approval is never reduced). The vault
 can raise it at any time, or set it to `0` to stop redemptions once that
 transaction lands (the contract itself has no owner and no pause).
 

@@ -178,6 +178,7 @@ constructor(address tokenA, address tokenB, address wallet,
 function redeem(uint256 amountA) external returns (uint256 amountB)
 function redeemTo(uint256 amountA, address to) public returns (uint256 amountB)
 function previewRedeem(uint256 amountA) external view returns (uint256 amountB)
+function sweep(IERC20 token) external returns (uint256 amount)
 
 // immutable public getters
 function tokenA() external view returns (address)
@@ -188,4 +189,5 @@ function rateDenominator() external view returns (uint256)
 
 event Redeemed(address indexed redeemer, address indexed recipient,
                uint256 amountA, uint256 amountB)
+event Swept(address indexed token, uint256 amount)
 ```
