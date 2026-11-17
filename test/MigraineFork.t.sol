@@ -3,6 +3,7 @@ pragma solidity 0.8.24;
 
 import {Test} from "forge-std/Test.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 
 import {Migraine} from "../src/Migraine.sol";
@@ -12,6 +13,8 @@ import {MockERC20} from "./mocks/MockERC20.sol";
 ///         FORK_TOKEN_A and FORK_HOLDER (an address holding at least one whole token) are set:
 ///         FORK_RPC_URL=... FORK_TOKEN_A=0x... FORK_HOLDER=0x... forge test --match-contract MigraineForkTest
 contract MigraineForkTest is Test {
+    using SafeERC20 for IERC20;
+
     Migraine internal redeemer;
     IERC20 internal tokenA;
     MockERC20 internal tokenB;
@@ -54,7 +57,7 @@ contract MigraineForkTest is Test {
 
     function test_SweepsARealTokenSentByMistake() public {
         vm.prank(holder);
-        tokenA.transfer(address(redeemer), oneA);
+        tokenA.safeTransfer(address(redeemer), oneA);
         assertEq(redeemer.sweep(tokenA), oneA);
         assertEq(tokenA.balanceOf(vault), oneA);
     }
