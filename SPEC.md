@@ -50,8 +50,6 @@ sends the resulting `tokenB` to the caller.
 
 When called:
 
-0. Revert if `msg.sender` is the vault wallet: the vault would pay itself in
-   `tokenA`, so `tokenB` would leave without a payment.
 1. Revert if `amountA == 0`.
 2. Compute `amountB = floor(amountA * rateNumerator / rateDenominator)`.
 3. Revert if `amountB == 0` (dust that would produce nothing).
@@ -100,7 +98,6 @@ mistake. With a zero balance it returns `0` and emits nothing.
 
 | Condition | Result |
 | --- | --- |
-| `msg.sender` is the vault wallet | Revert `VaultCannotRedeem()` |
 | `amountA == 0` | Revert `ZeroAmount()` |
 | `amountB == 0` after rounding | Revert `ZeroOutput()` |
 | `to` is zero, this contract, a token, or the wallet | Revert `InvalidRecipient(to)` |
@@ -130,9 +127,9 @@ Deployment reverts if any of the following hold:
 
 ## 7. Safety properties (desired invariants)
 
-These are the properties the tests target. The Verity model (see
-`verity/README.md`) proves P1, P5 and P6 for a model of the rate arithmetic, not
-for the deployed bytecode.
+These are the properties the tests and the Verity proofs target. The proofs are
+about a model of the contract, not the deployed bytecode; `verity/README.md` lists
+what each one covers.
 
 - **P1 (Rate correctness).** For every successful `redeem`/`redeemTo(amountA, …)`,
   the recipient receives exactly `floor(amountA * rateNumerator / rateDenominator)`
@@ -140,15 +137,17 @@ for the deployed bytecode.
 - **P2 (Direction / no reverse).** No reachable code path lets any caller obtain
   `tokenA` from the vault wallet, nor exchange `tokenB` for `tokenA`.
 - **P3 (Atomicity / no free lunch).** A recipient cannot receive `tokenB` unless
-  `msg.sender`, who is never the vault wallet, pays `amountA` of `tokenA`; the two
-  transfers commit together or not at all.
+  `msg.sender` pays `amountA` of `tokenA`; the two transfers commit together or not
+  at all. When `msg.sender` is the vault wallet itself, its `tokenA` leg is a
+  self-transfer: it pays out `tokenB` the vault could send directly anyway.
 - **P4 (No custody).** A redemption leaves `tokenA.balanceOf(redeemer)` and
   `tokenB.balanceOf(redeemer)` unchanged, for every valid `to`; tokens sent to the
   contract directly can only leave through `sweep`, to the vault wallet.
 - **P5 (Conservation).** Summed across all successful redemptions, the `tokenA`
   credited to the vault wallet equals the `amountA` values supplied by callers,
   and the `tokenB` debited from the vault wallet equals the corresponding
-  `amountB` values.
+  `amountB` values. A redemption by the vault wallet itself moves its `tokenA` to
+  itself, so it adds no net `tokenA`.
 - **P6 (Immutability).** After construction, `tokenA`, `tokenB`, `wallet`,
   `rateNumerator`, `rateDenominator` cannot change.
 - **P7 (Reentrancy-harmless).** The contract is stateless, so a reentrant token

@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/auryn-macmillan/migraine/actions/workflows/ci.yml/badge.svg)](https://github.com/auryn-macmillan/migraine/actions/workflows/ci.yml)
 [![coverage](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fauryn-macmillan%2Fmigraine%2Fbadges%2Fcoverage.json)](https://github.com/auryn-macmillan/migraine/actions/workflows/ci.yml)
-[![rate model proofs](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fauryn-macmillan%2Fmigraine%2Fbadges-verification%2Fverification.json)](./verity/README.md)
+[![formal verification](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fauryn-macmillan%2Fmigraine%2Fbadges-verification%2Fverification.json)](https://github.com/auryn-macmillan/migraine/actions/workflows/ci.yml)
 
 > *Migraine* — because migrating from token A to token B is normally such a pain.
 
@@ -139,20 +139,19 @@ python3 -m http.server 8080   # then open http://localhost:8080
 
 Set the deployed address in `web/config.js`. See [`web/README.md`](./web/README.md).
 
-## Rate model proofs (Verity)
+## Formal verification (Verity)
 
 [Verity](https://veritylang.com/) is a Lean 4 framework for writing smart
 contracts that compile to EVM bytecode with machine-checked correctness proofs.
-The Verity artifact is a **separate model**, not the deployed contract: a
-two-slot state machine with a fixed example rate (`25 / 10`) and a 256-bit
-multiply, without the token transfers, the recipient checks or `sweep`. It
-proves that every successful redemption in the model debits the inventory by
-exactly the previewed payout and preserves all other state. The Solidity
-contract's own behaviour (512-bit `mulDiv`, transfers, guards) is covered by the
-Foundry tests.
+Because the deployed contract's behaviour hinges on external ERC-20 calls and
+atomic token movement, the Verity artifact models the **provable accounting
+core** — the fixed-rate payout, the inventory debit, the cumulative-redeemed
+credit and the guard ordering — as a two-slot state machine, and proves that
+every successful redemption debits the inventory by exactly the previewed payout
+and preserves all other state.
 
 See [`verity/README.md`](./verity/README.md) for what is proven, what sits on
-Verity's trusted boundary, and how to build it inside a Verity checkout.
+Verity's trusted boundary, and how the `verity/` package is built and pinned.
 
 ## Continuous integration
 
@@ -165,13 +164,13 @@ pull request:
   derives the `src/` line-coverage percentage and, on `main`, publishes it to a
   `badges` branch that backs the coverage badge above (`src/Migraine.sol` is
   currently 100% line/branch/function covered).
-- **Verity** — installs the Lean toolchain, clones Verity at a pinned revision,
-  overlays the `Migraine` model via `scripts/ci-verity.sh`, builds the
-  proofs (`lake build Contracts.Migraine.Proofs.Correctness`), fails on
-  any `sorry`/`admit`, registers the compiler model and emits
-  `Migraine.yul` (the model's code, not the deployed contract) as a build
-  artifact. On `main` it publishes the **rate model proofs** badge (a
-  `badges-verification` branch, `passing` / `failing`).
+- **Verity** — installs the Lean toolchain and builds the self-contained
+  `verity/` package (which pins Verity as a git dependency, so nothing is
+  cloned or overlaid into the repo): `scripts/ci-verity.sh` builds the proofs,
+  fails on any `sorry`/`admit` or non-standard axiom, and emits
+  `Migraine.yul` as a build artifact. On `main` it publishes the
+  **formal verification** badge (a `badges-verification` branch, `passing` /
+  `failing`), so the proof status is visible without reading the workflow.
 
 Both badges are self-hosted (a shields.io "endpoint" backed by a JSON file on a
 dedicated branch, published by [`scripts/publish-badge.sh`](./scripts/publish-badge.sh))

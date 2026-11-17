@@ -10,15 +10,15 @@ import Verity.Specs.Common
 import Verity.Macro
 import Verity.EVM.Uint256
 import Verity.Stdlib.Math
-import Contracts.Migraine.Migraine
+import Migraine.Model
 
-namespace Contracts.Migraine.Spec
+namespace Migraine.Spec
 
 open Verity
 open Verity.Specs
 open Verity.EVM.Uint256
 open Verity.Stdlib.Math
-open Contracts.Migraine
+open Migraine
 
 /-- The payout formula at the immutable rate: `floor(amountA * num / den)`. -/
 def payout (amountA : Uint256) : Uint256 :=
@@ -63,4 +63,4 @@ def inventory_never_increases (s s' : ContractState) : Prop :=
 def redeemed_monotone (s s' : ContractState) : Prop :=
   (s.storage 1 : Nat) ≤ (s'.storage 1 : Nat)
 
-end Contracts.Migraine.Spec
+end Migraine.Spec

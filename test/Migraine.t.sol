@@ -6,7 +6,10 @@ import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 
 import {Migraine} from "../src/Migraine.sol";
 import {MockERC20} from "./mocks/MockERC20.sol";
+import {MockSafeWallet} from "./mocks/MockSafeWallet.sol";
 import {ReentrantOnceERC20} from "./mocks/ReentrantOnceERC20.sol";
+import {MockFalseReturnERC20, MockNoReturnERC20} from "./mocks/MockNonStandardERC20.sol";
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {TestBase} from "./utils/TestBase.sol";
 
 contract MigraineTest is TestBase {
@@ -378,19 +381,157 @@ contract MigraineTest is TestBase {
     }
 
     // ---------------------------------------------------------------------
-    // Vault as caller
+    // Math.mulDiv overflow (512-bit product, quotient must fit uint256)
     // ---------------------------------------------------------------------
 
-    function test_Redeem_RevertsWhenVaultIsCaller() public {
-        _fundVault(1_000e6);
-        tokenA.mint(vault, 1e18);
-        vm.startPrank(vault);
+    /// @dev Largest amountA whose payout floor(amountA * 3 / 2) still fits in uint256:
+    ///      floor((2^257 - 1) / 3); the payout is exactly type(uint256).max.
+    uint256 private constant MAX_SAFE_AMOUNT_A =
+        77194726158210796949047323339125271902179989777093709359638389338608753093290;
+
+    function test_PreviewRedeem_MaxSafeAmountPayoutIsMaxUint() public view {
+        assertEq(redeemer.previewRedeem(MAX_SAFE_AMOUNT_A), type(uint256).max);
+    }
+
+    function test_PreviewRedeem_RevertsOnMulDivOverflow() public {
+        // One wei past the boundary: floor((a+1) * 3 / 2) = 2^256 + 1 overflows uint256.
+        vm.expectRevert(abi.encodeWithSelector(bytes4(keccak256("Panic(uint256)")), uint256(0x11)));
+        redeemer.previewRedeem(MAX_SAFE_AMOUNT_A + 1);
+    }
+
+    function test_Redeem_RevertsOnMulDivOverflow() public {
+        // Overflow must revert before any transfer is attempted, not wrap to a small payout.
+        _fundUser(alice, type(uint256).max);
+        _fundVault(type(uint256).max);
+
+        vm.prank(alice);
+        vm.expectRevert(abi.encodeWithSelector(bytes4(keccak256("Panic(uint256)")), uint256(0x11)));
+        redeemer.redeem(type(uint256).max);
+
+        // Nothing moved.
+        assertEq(tokenA.balanceOf(vault), 0);
+        assertEq(tokenB.balanceOf(alice), 0);
+    }
+
+    // ---------------------------------------------------------------------
+    // Contract recipients and the vault-as-caller self-transfer path
+    // ---------------------------------------------------------------------
+
+    function test_RedeemTo_ContractRecipient() public {
+        uint256 amountA = 100e18;
+        uint256 amountB = amountA * RATE_NUM / RATE_DEN;
+        address walletRecipient = address(new MockSafeWallet(alice));
+
+        _fundVault(amountB);
+        _fundUser(alice, amountA);
+
+        vm.prank(alice);
+        uint256 got = redeemer.redeemTo(amountA, walletRecipient);
+
+        assertEq(got, amountB);
+        assertEq(tokenB.balanceOf(walletRecipient), amountB);
+        assertEq(tokenA.balanceOf(vault), amountA);
+    }
+
+    function test_RedeemTo_VaultAsCallerPaysRecipient() public {
+        // The vault redeeming its own tokenA: tokenA moves wallet -> wallet (self-transfer,
+        // a no-op in ERC-20) and tokenB pays out to the (non-vault) recipient.
+        uint256 amountA = 100e18;
+        uint256 amountB = amountA * RATE_NUM / RATE_DEN;
+
+        _fundVault(amountB);
+        tokenA.mint(vault, amountA);
+        vm.prank(vault);
         tokenA.approve(address(redeemer), type(uint256).max);
-        vm.expectRevert(Migraine.VaultCannotRedeem.selector);
-        redeemer.redeem(1e18);
-        vm.expectRevert(Migraine.VaultCannotRedeem.selector);
-        redeemer.redeemTo(1e18, alice);
-        vm.stopPrank();
+
+        vm.prank(vault);
+        uint256 got = redeemer.redeemTo(amountA, bob);
+
+        assertEq(got, amountB);
+        assertEq(tokenA.balanceOf(vault), amountA); // unchanged: self-transfer
+        assertEq(tokenB.balanceOf(bob), amountB);
+        assertEq(tokenB.balanceOf(vault), 0);
+    }
+
+    // ---------------------------------------------------------------------
+    // Non-standard ERC-20 return semantics (SafeERC20 boundary)
+    // ---------------------------------------------------------------------
+
+    function test_Redeem_RevertsWhenTokenAFalseReturn() public {
+        MockFalseReturnERC20 falsey = new MockFalseReturnERC20();
+        Migraine r = new Migraine(IERC20(address(falsey)), IERC20(address(tokenB)), vault, RATE_NUM, RATE_DEN);
+
+        falsey.mint(alice, 100e18);
+        vm.prank(alice);
+        falsey.approve(address(r), type(uint256).max);
+        tokenB.mint(vault, 1_000e18);
+        vm.prank(vault);
+        tokenB.approve(address(r), type(uint256).max);
+
+        vm.prank(alice);
+        vm.expectRevert(abi.encodeWithSelector(SafeERC20.SafeERC20FailedOperation.selector, address(falsey)));
+        r.redeem(100e18);
+
+        // Whole tx reverted: the lying token's internal transfer never persisted.
+        assertEq(falsey.balanceOf(alice), 100e18);
+        assertEq(falsey.balanceOf(vault), 0);
+    }
+
+    function test_Redeem_RevertsWhenTokenBFalseReturn_Atomically() public {
+        // Leg A (honest token) succeeds first; the false-return B leg reverts
+        // the whole transaction — stateless contract + revert = atomic rollback.
+        MockFalseReturnERC20 falseyB = new MockFalseReturnERC20();
+        Migraine r = new Migraine(IERC20(address(tokenA)), IERC20(address(falseyB)), vault, RATE_NUM, RATE_DEN);
+
+        tokenA.mint(alice, 100e18);
+        vm.prank(alice);
+        tokenA.approve(address(r), type(uint256).max);
+        falseyB.mint(vault, 150e18);
+        vm.prank(vault);
+        falseyB.approve(address(r), type(uint256).max);
+
+        vm.prank(alice);
+        vm.expectRevert(abi.encodeWithSelector(SafeERC20.SafeERC20FailedOperation.selector, address(falseyB)));
+        r.redeem(100e18);
+
+        assertEq(tokenA.balanceOf(alice), 100e18); // leg A rolled back
+        assertEq(tokenA.balanceOf(vault), 0);
+    }
+
+    function test_Redeem_SucceedsWithLegacyNoReturnTokens() public {
+        // USDT-style tokens with no return values: SafeERC20 accepts them.
+        MockNoReturnERC20 legacyA = new MockNoReturnERC20();
+        MockNoReturnERC20 legacyB = new MockNoReturnERC20();
+        Migraine r = new Migraine(IERC20(address(legacyA)), IERC20(address(legacyB)), vault, RATE_NUM, RATE_DEN);
+
+        legacyA.mint(alice, 100e18);
+        vm.prank(alice);
+        legacyA.approve(address(r), type(uint256).max);
+        legacyB.mint(vault, 1_000e18);
+        vm.prank(vault);
+        legacyB.approve(address(r), type(uint256).max);
+
+        vm.prank(alice);
+        uint256 got = r.redeem(100e18);
+
+        assertEq(got, 150e18);
+        assertEq(legacyA.balanceOf(alice), 0);
+        assertEq(legacyA.balanceOf(vault), 100e18);
+        assertEq(legacyB.balanceOf(alice), 150e18);
+        assertEq(legacyB.balanceOf(vault), 1_000e18 - 150e18);
+    }
+
+    function test_Redeem_MaxAllowanceNotConsumed() public {
+        // OZ ERC-20 skips allowance decrement at MAX_UINT256 — the exact
+        // modelled behaviour behind `redeemTo_success_run`'s non-MAX premise.
+        _fundUser(alice, 100e18); // approves type(uint256).max
+        _fundVault(1_000e18);
+
+        vm.prank(alice);
+        redeemer.redeem(100e18);
+
+        assertEq(tokenA.allowance(alice, address(redeemer)), type(uint256).max);
+        assertEq(tokenB.allowance(vault, address(redeemer)), type(uint256).max);
     }
 
     // ---------------------------------------------------------------------
@@ -420,14 +561,8 @@ contract MigraineTest is TestBase {
     }
 
     // ---------------------------------------------------------------------
-    // Rate edge cases
+    // Decimals
     // ---------------------------------------------------------------------
-
-    function test_PreviewRedeem_RevertsOnOverflow() public {
-        // type(uint256).max * 3 / 2 does not fit in 256 bits.
-        vm.expectRevert();
-        redeemer.previewRedeem(type(uint256).max);
-    }
 
     /// @dev A 6-decimal tokenA to an 18-decimal tokenB: the smallest-unit rate carries a
     ///      1e12 factor. At 2.5 tokenB per tokenA the numerator is 2.5 * 1e12.

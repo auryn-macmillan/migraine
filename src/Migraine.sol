@@ -68,8 +68,6 @@ contract Migraine {
     error ZeroOutput();
     /// @notice The recipient was the zero address, this contract, a token, or the vault wallet.
     error InvalidRecipient(address to);
-    /// @notice The vault wallet tried to redeem against itself.
-    error VaultCannotRedeem();
 
     /// @param tokenA_ Token given by users. Must be non-zero and distinct from `tokenB_`.
     /// @param tokenB_ Token received by users. Must be non-zero and distinct from `tokenA_`.
@@ -117,8 +115,6 @@ contract Migraine {
     ///        `tokenA`, `tokenB`, or `wallet`.
     /// @return amountB Amount of `tokenB` paid out.
     function redeemTo(uint256 amountA, address to) public returns (uint256 amountB) {
-        // The vault would pay itself in tokenA, so tokenB would leave without a payment.
-        if (msg.sender == wallet) revert VaultCannotRedeem();
         if (amountA == 0) revert ZeroAmount();
 
         amountB = Math.mulDiv(amountA, rateNumerator, rateDenominator);
