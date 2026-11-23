@@ -8,8 +8,9 @@
 
 A small, immutable, permissionless on-chain exchange: anyone can redeem
 **token A** for **token B** at a **fixed rate**, in one direction only. The
-token B inventory lives in a separate vault wallet (e.g. a Gnosis Safe), and the
-redeemer contract never holds any tokens itself.
+token B inventory lives in a separate vault wallet (e.g. a Gnosis Safe), and a
+redemption never routes tokens through the redeemer contract itself (tokens sent
+to it by mistake can be swept to the vault).
 
 This repository contains four deliverables:
 
@@ -91,11 +92,19 @@ The test suite covers:
 ```bash
 export TOKEN_A=0x...
 export TOKEN_B=0x...
-export VAULT_WALLET=0x...        # a Gnosis Safe address
-export RATE_NUMERATOR=25         # amountB = amountA * 25 / 10
-export RATE_DENOMINATOR=10
+export VAULT_WALLET=0x...          # a dedicated Safe
+# The rate is in smallest units, so it carries any decimals difference. Example:
+# a 6-decimal tokenA to an 18-decimal tokenB at 2.5 tokenB per tokenA:
+export RATE_NUMERATOR=2500000000000    # amountB = amountA * 2500000000000 / 1
+export RATE_DENOMINATOR=1
+export EXPECTED_B_PER_A=2500000000000000000   # what one whole tokenA must buy
 forge script script/Deploy.s.sol --rpc-url "$RPC_URL" --broadcast
 ```
+
+The script refuses to broadcast unless one whole `tokenA` previews to
+`EXPECTED_B_PER_A`, and checks the deployed contract again afterwards; a deployed
+rate can never change. Start with a small vault allowance and one test
+redemption, then raise the allowance.
 
 ### Vault wallet checklist
 
@@ -105,9 +114,23 @@ Before users can redeem, the vault wallet must:
 2. execute an ERC-20 `approve(Migraine, allowance)` transaction on
    `tokenB`.
 
-The allowance is the effective cap: the redeemer can never pay out more `tokenB`
-than the vault has approved. Choose an allowance equal to
-`maxTokenA * rateNumerator / rateDenominator`.
+The allowance is the live cap: the redeemer can never pay out more `tokenB`
+than the vault has approved, and each redemption uses some of it up (an unlimited
+`type(uint256).max` approval is never reduced). The vault
+can raise it at any time, or set it to `0` to stop redemptions once that
+transaction lands (the contract itself has no owner and no pause).
+
+### Operating a vault
+
+- Use a dedicated vault Safe for each instance, apart from any treasury, and
+  fund it in tranches; keep the allowance equal to what it should pay out.
+- The vault must hold `tokenB` it can actually transfer. A token with transfer
+  locks (vesting, per-account locks) fails a redemption when the vault's
+  transferable balance is too low, whatever the allowance says.
+- The vault keeps the `tokenA` it receives. If it moved that `tokenA` back into
+  circulation, the same tokens could be redeemed twice.
+- Tokens sent to the contract by mistake: call `sweep(token)`, then return them
+  from the vault.
 
 ## Frontend
 

@@ -36,6 +36,8 @@
     balA: document.getElementById("balA"),
     balB: document.getElementById("balB"),
     allowA: document.getElementById("allowA"),
+    allowB: document.getElementById("allowB"),
+    availB: document.getElementById("availB"),
     amountA: document.getElementById("amountA"),
     max: document.getElementById("max"),
     recipient: document.getElementById("recipient"),
@@ -99,6 +101,10 @@
         setStatus("No browser wallet found. Install MetaMask.", "error");
         return;
       }
+      if (CONFIG.chainId == null) {
+        setStatus("Set chainId in config.js before using this page.", "error");
+        return;
+      }
       setStatus("Connecting\u2026");
       const provider = new ethers.BrowserProvider(window.ethereum);
       await provider.send("eth_requestAccounts", []);
@@ -106,7 +112,7 @@
       const account = await signer.getAddress();
 
       const network = await provider.getNetwork();
-      if (CONFIG.chainId != null && Number(network.chainId) !== Number(CONFIG.chainId)) {
+      if (Number(network.chainId) !== Number(CONFIG.chainId)) {
         setStatus(
           "Wrong network: expected chain " + CONFIG.chainId + ", got " + network.chainId + ".",
           "error"
@@ -185,13 +191,17 @@
 
   async function refreshBalances() {
     if (!state.account) return;
-    const [bA, bB, allow] = await Promise.all([
+    const [bA, bB, allow, allowB] = await Promise.all([
       state.tokenA.balanceOf(state.account),
       state.tokenB.balanceOf(state.meta.wallet),
-      state.tokenA.allowance(state.account, CONFIG.contractAddress)
+      state.tokenA.allowance(state.account, CONFIG.contractAddress),
+      state.tokenB.allowance(state.meta.wallet, CONFIG.contractAddress)
     ]);
     els.balA.textContent = fmt(bA, state.decA) + " " + state.symA;
     els.balB.textContent = fmt(bB, state.decB) + " " + state.symB;
+    // Payouts need both the vault's balance and its allowance to this contract.
+    els.allowB.textContent = fmt(allowB, state.decB) + " " + state.symB;
+    els.availB.textContent = fmt(bB < allowB ? bB : allowB, state.decB) + " " + state.symB;
     els.allowA.textContent = fmt(allow, state.decA) + " " + state.symA;
     state.meta.userBalanceA = bA;
     state.meta.allowanceA = allow;
@@ -251,7 +261,8 @@
     try {
       els.approve.disabled = true;
       setStatus("Approving " + state.symA + "\u2026");
-      const tx = await state.tokenA.approve(CONFIG.contractAddress, amount);
+      // Reads use the provider; a state change needs the signer.
+      const tx = await state.tokenA.connect(state.signer).approve(CONFIG.contractAddress, amount);
       await tx.wait();
       setStatus("Approved.", "ok");
       await refreshBalances();

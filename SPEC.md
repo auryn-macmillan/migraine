@@ -69,20 +69,30 @@ recipient is configurable.
 Return exactly the `amountB` that `redeem`/`redeemTo` would pay, using the same
 full-precision, floor-rounded formula. This is a pure read used by the UI. It
 returns `0` for inputs that `redeem`/`redeemTo` reject (`amountA == 0`, or a
-payout that rounds to zero) and does not revert.
+payout that rounds to zero). Like `redeem`, it reverts only when the payout does
+not fit in 256 bits.
 
 ### FR-4 — One-way only
 There is **no** function anywhere in the contract that exchanges `tokenB` back
 for `tokenA`, and no way to change the direction, the rate, the tokens, or the
-wallet after deployment. The only state-changing methods are `redeem` and
-`redeemTo`.
+wallet after deployment. The only state-changing methods are `redeem`,
+`redeemTo` and `sweep`; `sweep` only moves this contract's own balance to the
+vault wallet.
 
 ### FR-5 — No custody
-At the end of every successful call, and at every instant in between, the
-`Migraine` contract's balance of `tokenA` and of `tokenB` is zero. It only ever
-moves tokens directly between the caller/vault wallet (for `tokenA`) and the
-vault wallet/recipient (for `tokenB`). `to == address(this)` is rejected, so
-`tokenB` can never be stranded in the contract.
+A redemption never routes tokens through the contract: it moves `tokenA` directly
+from the caller to the vault wallet and `tokenB` directly from the vault wallet to
+the recipient. `to == address(this)` is rejected, so a redemption can never
+strand `tokenB` here. A plain ERC-20 transfer to the contract's address cannot be
+blocked; `sweep` (FR-6) moves such tokens on.
+
+### FR-6 — Sweep
+`sweep(IERC20 token) external returns (uint256 amount)`
+
+Move this contract's whole balance of `token` to the vault wallet and emit
+`Swept(token, amount)`. Anyone may call it; the destination is always the
+immutable vault wallet, which can return the tokens to whoever sent them by
+mistake. With a zero balance it returns `0` and emits nothing.
 
 ## 5. Preconditions and revert conditions
 
@@ -94,6 +104,7 @@ vault wallet/recipient (for `tokenB`). `to == address(this)` is rejected, so
 | Caller has not approved `tokenA` (or insufficient allowance/balance) | Revert (via `SafeERC20`, propagated) |
 | Vault wallet has not approved `tokenB` (or insufficient allowance) | Revert (via `SafeERC20`, propagated) |
 | Vault wallet holds less `tokenB` than `amountB` | Revert (via `SafeERC20`, propagated) |
+| Payout does not fit in 256 bits | Revert (`Math.mulDiv`) |
 
 Reentrancy: the contract holds no mutable state, so a reentrant token can only
 trigger additional, independent redemptions — each bounded by the same
@@ -116,8 +127,9 @@ Deployment reverts if any of the following hold:
 
 ## 7. Safety properties (desired invariants)
 
-These are the properties the formal specification (Verity/Lean) and the tests
-target.
+These are the properties the tests and the Verity proofs target. The proofs are
+about a model of the contract, not the deployed bytecode; `verity/README.md` lists
+what each one covers.
 
 - **P1 (Rate correctness).** For every successful `redeem`/`redeemTo(amountA, …)`,
   the recipient receives exactly `floor(amountA * rateNumerator / rateDenominator)`
@@ -125,14 +137,17 @@ target.
 - **P2 (Direction / no reverse).** No reachable code path lets any caller obtain
   `tokenA` from the vault wallet, nor exchange `tokenB` for `tokenA`.
 - **P3 (Atomicity / no free lunch).** A recipient cannot receive `tokenB` unless
-  `msg.sender` pays `amountA` of `tokenA`; the two transfers commit together or
-  not at all.
-- **P4 (No custody).** `tokenA.balanceOf(redeemer) == 0` and
-  `tokenB.balanceOf(redeemer) == 0` after every call, for every valid `to`.
+  `msg.sender` pays `amountA` of `tokenA`; the two transfers commit together or not
+  at all. When `msg.sender` is the vault wallet itself, its `tokenA` leg is a
+  self-transfer: it pays out `tokenB` the vault could send directly anyway.
+- **P4 (No custody).** A redemption leaves `tokenA.balanceOf(redeemer)` and
+  `tokenB.balanceOf(redeemer)` unchanged, for every valid `to`; tokens sent to the
+  contract directly can only leave through `sweep`, to the vault wallet.
 - **P5 (Conservation).** Summed across all successful redemptions, the `tokenA`
   credited to the vault wallet equals the `amountA` values supplied by callers,
   and the `tokenB` debited from the vault wallet equals the corresponding
-  `amountB` values.
+  `amountB` values. A redemption by the vault wallet itself moves its `tokenA` to
+  itself, so it adds no net `tokenA`.
 - **P6 (Immutability).** After construction, `tokenA`, `tokenB`, `wallet`,
   `rateNumerator`, `rateDenominator` cannot change.
 - **P7 (Reentrancy-harmless).** The contract is stateless, so a reentrant token
@@ -163,6 +178,7 @@ constructor(address tokenA, address tokenB, address wallet,
 function redeem(uint256 amountA) external returns (uint256 amountB)
 function redeemTo(uint256 amountA, address to) public returns (uint256 amountB)
 function previewRedeem(uint256 amountA) external view returns (uint256 amountB)
+function sweep(IERC20 token) external returns (uint256 amount)
 
 // immutable public getters
 function tokenA() external view returns (address)
@@ -173,4 +189,5 @@ function rateDenominator() external view returns (uint256)
 
 event Redeemed(address indexed redeemer, address indexed recipient,
                uint256 amountA, uint256 amountB)
+event Swept(address indexed token, uint256 amount)
 ```

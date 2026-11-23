@@ -28,6 +28,8 @@
       <div class="field"><span class="label">Rate</span><span id="rate" class="mono">&mdash;</span></div>
       <div class="field"><span class="label">Your token A balance</span><span id="balA" class="mono">&mdash;</span></div>
       <div class="field"><span class="label">Vault token B balance</span><span id="balB" class="mono">&mdash;</span></div>
+      <div class="field"><span class="label">Vault token B allowance</span><span id="allowB" class="mono">&mdash;</span></div>
+      <div class="field"><span class="label">Available to redeem</span><span id="availB" class="mono">&mdash;</span></div>
       <div class="field"><span class="label">Your token A allowance</span><span id="allowA" class="mono">&mdash;</span></div>
     </section>
 
@@ -53,7 +55,7 @@
 
     <footer class="muted">
       Configure the deployed address in <code>config.js</code>.
-      The vault wallet must have approved this contract for token B.
+      The vault wallet's token B allowance to this contract caps payouts.
     </footer>
   </main>
 

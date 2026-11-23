@@ -9,7 +9,7 @@ each implementation to a `Prop`-valued specification with a proof.
 
 ```
 Migraine/
-  Migraine.lean              reference model (`verity_contract` block)
+  Model.lean                 reference model (`verity_contract` block)
   Spec.lean                  formal specification (`redeem_spec`, `preview_spec`, ...)
   Invariants.lean            well-formedness invariant
   System.lean                closed-system model: `redeemTo` with inlined
@@ -130,6 +130,12 @@ state a reentrant call could exploit. All of these are statements about the Veri
 deployed bytecode; the external-call mechanics of the real `safeTransferFrom`
 calls stay on Verity's trust boundary.
 
+Not covered by the proofs, and tested in Foundry instead: `sweep`, which is not
+modelled and only moves this contract's own stray balance to the vault wallet;
+and a redemption by the vault wallet itself, which the model handles as a token A
+self-transfer but `redeemTo_success_run` excludes (it assumes the caller is not
+the vault).
+
 ## Build it (self-contained package)
 
 This directory is a standalone Lake package: Verity is a pinned git
@@ -160,7 +166,7 @@ gate) and is what CI executes.
 To upgrade Verity, bump the pin in `lakefile.lean` and rebuild; the
 proof tree must go green against the new core before the bump lands.
 
-This package was verified against Verity `203a1788f`
+This package was verified against Verity `ac82752cc`
 (`leanprover/lean4:v4.31.0`, pinned in `lean-toolchain`): the whole
 `Migraine` library builds successfully and the compiler emits
 [`artifacts/yul/Migraine.yul`](./artifacts/yul/Migraine.yul). The
